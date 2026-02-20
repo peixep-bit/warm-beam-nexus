@@ -84,9 +84,11 @@ export type Database = {
       }
       statement_imports: {
         Row: {
+          cnpj: string | null
           created_at: string
           file_name: string
           id: string
+          loja: string | null
           period_end: string | null
           period_start: string | null
           platform_id: string
@@ -98,9 +100,11 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          cnpj?: string | null
           created_at?: string
           file_name: string
           id?: string
+          loja?: string | null
           period_end?: string | null
           period_start?: string | null
           platform_id: string
@@ -112,9 +116,11 @@ export type Database = {
           user_id: string
         }
         Update: {
+          cnpj?: string | null
           created_at?: string
           file_name?: string
           id?: string
+          loja?: string | null
           period_end?: string | null
           period_start?: string | null
           platform_id?: string
@@ -137,6 +143,7 @@ export type Database = {
       }
       statement_items: {
         Row: {
+          cnpj: string | null
           created_at: string
           data_transacao: string
           desconto: number | null
@@ -144,14 +151,19 @@ export type Database = {
           forma_pagamento: string | null
           id: string
           import_id: string
+          loja: string | null
           numero_pedido: string | null
+          quantidade_pedidos: number | null
           status: string | null
           taxa: number | null
           user_id: string
           valor_bruto: number
           valor_liquido: number
+          valor_pdv: number | null
+          valor_taxa_entrega: number | null
         }
         Insert: {
+          cnpj?: string | null
           created_at?: string
           data_transacao: string
           desconto?: number | null
@@ -159,14 +171,19 @@ export type Database = {
           forma_pagamento?: string | null
           id?: string
           import_id: string
+          loja?: string | null
           numero_pedido?: string | null
+          quantidade_pedidos?: number | null
           status?: string | null
           taxa?: number | null
           user_id: string
           valor_bruto?: number
           valor_liquido?: number
+          valor_pdv?: number | null
+          valor_taxa_entrega?: number | null
         }
         Update: {
+          cnpj?: string | null
           created_at?: string
           data_transacao?: string
           desconto?: number | null
@@ -174,12 +191,16 @@ export type Database = {
           forma_pagamento?: string | null
           id?: string
           import_id?: string
+          loja?: string | null
           numero_pedido?: string | null
+          quantidade_pedidos?: number | null
           status?: string | null
           taxa?: number | null
           user_id?: string
           valor_bruto?: number
           valor_liquido?: number
+          valor_pdv?: number | null
+          valor_taxa_entrega?: number | null
         }
         Relationships: [
           {

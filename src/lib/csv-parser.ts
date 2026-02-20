@@ -1,5 +1,3 @@
-import * as XLSX from "xlsx";
-
 export interface ParsedRow {
   data_transacao: string;
   loja: string;
@@ -34,8 +32,19 @@ function normalizeHeader(h: string): string {
     .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // remove acentos
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9_]/g, "_");
+}
+
+function parseDate(value: string | number | undefined | null): string {
+  if (!value) return new Date().toISOString().split("T")[0];
+  const s = String(value).trim();
+  // DD/MM/YYYY HH:MM:SS → YYYY-MM-DD
+  const brMatch = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (brMatch) return `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}`;
+  // Already ISO
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return s;
 }
 
 function rowFromRecord(row: Record<string, string | number>): ParsedRow {
@@ -46,21 +55,69 @@ function rowFromRecord(row: Record<string, string | number>): ParsedRow {
     return "";
   };
 
+  // iFood: TAXAS E COMISSOES (negativo no arquivo) + TAXA DE SERVIÇO
+  const taxasComissoes = parseNumber(get(
+    "taxas_e_comissoes__r__", "taxas_e_comissoes", "comissoes", "comissao",
+    "taxa", "taxa_plataforma", "taxa_servico", "comissao_plataforma", "fee"
+  ));
+  const taxaServico = parseNumber(get("taxa_de_servico__r__", "taxa_de_servico", "taxa_servico"));
+  // taxasComissoes vem negativo no iFood, pegamos o absoluto
+  const taxa = Math.abs(taxasComissoes) + taxaServico;
+
+  // iFood: incentivo iFood + incentivo loja + incentivo rede = desconto total
+  const incIFood = parseNumber(get("incentivo_promocional_do_ifood__r__", "incentivo_promocional_do_ifood", "incentivo_ifood"));
+  const incLoja  = parseNumber(get("incentivo_promocional_da_loja__r__",  "incentivo_promocional_da_loja",  "incentivo_loja"));
+  const incRede  = parseNumber(get("incentivo_promocional_da_rede__r__",  "incentivo_promocional_da_rede",  "incentivo_rede"));
+  const descontoExplicito = Math.abs(parseNumber(get("desconto", "discount", "promocao", "valor_desconto", "descontos")));
+  const desconto = descontoExplicito || (incIFood + incLoja + incRede);
+
   return {
-    data_transacao:
-      String(get("data", "data_transacao", "date", "data_pedido", "data_venda") || new Date().toISOString().split("T")[0]),
-    loja: String(get("loja", "nome_loja", "store", "estabelecimento", "restaurante") || ""),
-    cnpj: String(get("cnpj", "cnpj_loja", "documento") || ""),
-    descricao: String(get("descricao", "description", "desc", "produto") || ""),
-    quantidade_pedidos: parseInteger(get("quantidade_pedidos", "qtd_pedidos", "pedidos", "orders", "qtd", "quantidade")),
-    valor_pdv: parseNumber(get("valor_pdv", "pdv", "faturado_pdv", "valor_cardapio", "preco_cardapio")),
-    valor_bruto: parseNumber(get("valor_bruto", "valor", "bruto", "gross", "subtotal", "total_pedido")),
-    desconto: parseNumber(get("desconto", "discount", "promocao", "valor_desconto", "descontos")),
-    taxa: parseNumber(get("taxa", "comissao", "fee", "taxa_plataforma", "taxa_servico", "comissao_plataforma")),
-    valor_taxa_entrega: parseNumber(get("taxa_entrega", "valor_taxa_entrega", "frete", "delivery_fee", "entrega")),
-    valor_liquido: parseNumber(get("valor_liquido", "liquido", "net", "repasse", "valor_repasse", "total_liquido")),
-    numero_pedido: String(get("pedido", "numero_pedido", "order", "id_pedido", "cod_pedido", "codigo_pedido") || ""),
-    forma_pagamento: String(get("pagamento", "forma_pagamento", "payment", "metodo_pagamento") || ""),
+    // iFood: "DATA E HORA DO PEDIDO" → normalizado para YYYY-MM-DD
+    data_transacao: parseDate(get(
+      "data_e_hora_do_pedido", "data_transacao", "data", "date", "data_pedido", "data_venda"
+    )),
+    // iFood: "NOME DA LOJA"
+    loja: String(get("nome_da_loja", "loja", "nome_loja", "store", "estabelecimento", "restaurante") || ""),
+    // iFood: "ID DA LOJA" como identificador (pode ser CNPJ em outras plataformas)
+    cnpj: String(get("cnpj", "cnpj_loja", "documento", "id_da_loja") || ""),
+    // iFood: "STATUS FINAL DO PEDIDO" como descrição
+    descricao: String(get(
+      "status_final_do_pedido", "descricao", "description", "desc", "produto", "status"
+    ) || ""),
+    // iFood: cada linha = 1 pedido por padrão
+    quantidade_pedidos: parseInteger(get(
+      "quantidade_pedidos", "qtd_pedidos", "pedidos", "orders", "qtd", "quantidade"
+    )) || 1,
+    // iFood: "VALOR DOS ITENS (R$)" = valor no cardápio / PDV
+    valor_pdv: parseNumber(get(
+      "valor_dos_itens__r__", "valor_dos_itens", "valor_pdv", "pdv",
+      "faturado_pdv", "valor_cardapio", "preco_cardapio"
+    )),
+    // iFood: "TOTAL PAGO PELO CLIENTE (R$)" = valor bruto
+    valor_bruto: parseNumber(get(
+      "total_pago_pelo_cliente__r__", "total_pago_pelo_cliente",
+      "valor_bruto", "valor", "bruto", "gross", "subtotal", "total_pedido"
+    )),
+    desconto,
+    taxa,
+    // iFood: "TAXA DE ENTREGA PAGA PELO CLIENTE (R$)"
+    valor_taxa_entrega: parseNumber(get(
+      "taxa_de_entrega_paga_pelo_cliente__r__", "taxa_de_entrega_paga_pelo_cliente",
+      "taxa_entrega", "valor_taxa_entrega", "frete", "delivery_fee", "entrega"
+    )),
+    // iFood: "VALOR LIQUIDO (R$)"
+    valor_liquido: parseNumber(get(
+      "valor_liquido__r__", "valor_liquido", "liquido", "net", "repasse", "valor_repasse", "total_liquido"
+    )),
+    // iFood: "ID CURTO DO PEDIDO"
+    numero_pedido: String(get(
+      "id_curto_do_pedido", "id_completo_do_pedido", "pedido", "numero_pedido",
+      "order", "id_pedido", "cod_pedido", "codigo_pedido"
+    ) || ""),
+    // iFood: "FORMA DE PAGAMENTO"
+    forma_pagamento: String(get(
+      "forma_de_pagamento", "forma_pagamento", "pagamento", "payment", "metodo_pagamento"
+    ) || ""),
   };
 }
 
@@ -85,8 +142,10 @@ export function parseCSV(text: string): ParsedRow[] {
 }
 
 export async function parseXLSX(file: File): Promise<ParsedRow[]> {
+  // Dynamic import to avoid React duplicate instance issues
+  const XLSX = await import("xlsx");
   const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+  const workbook = XLSX.read(buffer, { type: "array", cellDates: false });
   const sheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];
 
@@ -98,7 +157,6 @@ export async function parseXLSX(file: File): Promise<ParsedRow[]> {
   if (jsonData.length === 0) return [];
 
   return jsonData.map(raw => {
-    // Normalize headers
     const record: Record<string, string | number> = {};
     for (const key of Object.keys(raw)) {
       const normalized = normalizeHeader(key);

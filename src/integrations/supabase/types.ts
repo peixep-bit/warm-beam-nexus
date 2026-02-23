@@ -151,14 +151,20 @@ export type Database = {
           forma_pagamento: string | null
           id: string
           import_id: string
+          incentivo_ifood: number | null
+          incentivo_loja: number | null
+          incentivo_rede: number | null
           loja: string | null
           numero_pedido: string | null
           quantidade_pedidos: number | null
           status: string | null
           taxa: number | null
+          taxa_servico: number | null
+          taxas_comissoes: number | null
           user_id: string
           valor_bruto: number
           valor_liquido: number
+          valor_liquido_conciliado: number | null
           valor_pdv: number | null
           valor_taxa_entrega: number | null
         }
@@ -171,14 +177,20 @@ export type Database = {
           forma_pagamento?: string | null
           id?: string
           import_id: string
+          incentivo_ifood?: number | null
+          incentivo_loja?: number | null
+          incentivo_rede?: number | null
           loja?: string | null
           numero_pedido?: string | null
           quantidade_pedidos?: number | null
           status?: string | null
           taxa?: number | null
+          taxa_servico?: number | null
+          taxas_comissoes?: number | null
           user_id: string
           valor_bruto?: number
           valor_liquido?: number
+          valor_liquido_conciliado?: number | null
           valor_pdv?: number | null
           valor_taxa_entrega?: number | null
         }
@@ -191,14 +203,20 @@ export type Database = {
           forma_pagamento?: string | null
           id?: string
           import_id?: string
+          incentivo_ifood?: number | null
+          incentivo_loja?: number | null
+          incentivo_rede?: number | null
           loja?: string | null
           numero_pedido?: string | null
           quantidade_pedidos?: number | null
           status?: string | null
           taxa?: number | null
+          taxa_servico?: number | null
+          taxas_comissoes?: number | null
           user_id?: string
           valor_bruto?: number
           valor_liquido?: number
+          valor_liquido_conciliado?: number | null
           valor_pdv?: number | null
           valor_taxa_entrega?: number | null
         }

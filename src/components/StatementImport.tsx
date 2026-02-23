@@ -93,6 +93,12 @@ export function StatementImport() {
         valor_liquido: r.valor_liquido,
         numero_pedido: r.numero_pedido,
         forma_pagamento: r.forma_pagamento,
+        incentivo_ifood: r.incentivo_ifood,
+        incentivo_loja: r.incentivo_loja,
+        incentivo_rede: r.incentivo_rede,
+        taxa_servico: r.taxa_servico,
+        taxas_comissoes: r.taxas_comissoes,
+        valor_liquido_conciliado: r.valor_liquido_conciliado,
       }));
 
       const { error: itemsErr } = await supabase.from("statement_items").insert(items);
@@ -167,34 +173,38 @@ export function StatementImport() {
         {parsedData.length > 0 && (
           <div className="rounded-lg bg-muted p-4 space-y-2 text-sm">
             <p className="font-semibold text-foreground">{parsedData.length} linhas encontradas</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <div>
                 <p className="text-muted-foreground text-xs">Pedidos</p>
                 <p className="font-medium">{sum("quantidade_pedidos")}</p>
               </div>
               <div>
-                <p className="text-muted-foreground text-xs">Valor PDV</p>
+                <p className="text-muted-foreground text-xs">Valor Itens (PDV)</p>
                 <p className="font-medium">{fmt(sum("valor_pdv"))}</p>
               </div>
               <div>
-                <p className="text-muted-foreground text-xs">Valor Bruto</p>
-                <p className="font-medium">{fmt(sum("valor_bruto"))}</p>
+                <p className="text-muted-foreground text-xs">Taxa Entrega Cliente</p>
+                <p className="font-medium">{fmt(sum("valor_taxa_entrega"))}</p>
               </div>
               <div>
-                <p className="text-muted-foreground text-xs">Descontos</p>
-                <p className="font-medium text-destructive">-{fmt(sum("desconto"))}</p>
+                <p className="text-muted-foreground text-xs">Incentivo iFood</p>
+                <p className="font-medium">{fmt(sum("incentivo_ifood"))}</p>
               </div>
               <div>
-                <p className="text-muted-foreground text-xs">Taxa Plataforma</p>
-                <p className="font-medium text-destructive">-{fmt(sum("taxa"))}</p>
+                <p className="text-muted-foreground text-xs">Incentivo Loja</p>
+                <p className="font-medium text-destructive">{fmt(sum("incentivo_loja"))}</p>
               </div>
               <div>
-                <p className="text-muted-foreground text-xs">Taxa Entrega</p>
-                <p className="font-medium text-destructive">-{fmt(sum("valor_taxa_entrega"))}</p>
+                <p className="text-muted-foreground text-xs">Taxa Serviço</p>
+                <p className="font-medium">{fmt(sum("taxa_servico"))}</p>
               </div>
-              <div className="col-span-2 sm:col-span-3 border-t pt-2 mt-1">
-                <p className="text-muted-foreground text-xs">Total Líquido (Repasse)</p>
-                <p className="font-bold text-base">{fmt(sum("valor_liquido"))}</p>
+              <div>
+                <p className="text-muted-foreground text-xs">Taxas e Comissões</p>
+                <p className="font-medium text-destructive">{fmt(sum("taxas_comissoes"))}</p>
+              </div>
+              <div className="col-span-2 sm:col-span-4 border-t pt-2 mt-1 bg-primary/10 rounded p-2">
+                <p className="text-muted-foreground text-xs font-semibold">💰 Líquido Conciliado (Itens + Inc. Loja + Comissões)</p>
+                <p className="font-bold text-lg text-primary">{fmt(sum("valor_liquido_conciliado"))}</p>
               </div>
             </div>
           </div>

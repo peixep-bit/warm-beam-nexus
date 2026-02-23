@@ -127,30 +127,30 @@ export function ImportsList() {
                               <TableHeader>
                                 <TableRow>
                                   <TableHead className="text-xs">Data</TableHead>
-                                  <TableHead className="text-xs">Loja</TableHead>
-                                  <TableHead className="text-xs">CNPJ</TableHead>
-                                  <TableHead className="text-xs text-right">Pedidos</TableHead>
-                                  <TableHead className="text-xs text-right">PDV</TableHead>
-                                  <TableHead className="text-xs text-right">Bruto</TableHead>
-                                  <TableHead className="text-xs text-right">Desconto</TableHead>
-                                  <TableHead className="text-xs text-right">Taxa Plat.</TableHead>
-                                  <TableHead className="text-xs text-right">Taxa Entrega</TableHead>
-                                  <TableHead className="text-xs text-right">Líquido</TableHead>
+                                  <TableHead className="text-xs">Pedido</TableHead>
+                                  <TableHead className="text-xs text-right">Valor Itens</TableHead>
+                                  <TableHead className="text-xs text-right">Tx Entrega</TableHead>
+                                  <TableHead className="text-xs text-right">Inc. iFood</TableHead>
+                                  <TableHead className="text-xs text-right">Inc. Loja</TableHead>
+                                  <TableHead className="text-xs text-right">Tx Serviço</TableHead>
+                                  <TableHead className="text-xs text-right">Taxas/Com.</TableHead>
+                                  <TableHead className="text-xs text-right">Líquido Plat.</TableHead>
+                                  <TableHead className="text-xs text-right font-bold bg-primary/10">Líq. Conciliado</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {items.map((item: any) => (
                                   <TableRow key={item.id}>
                                     <TableCell className="text-xs">{item.data_transacao}</TableCell>
-                                    <TableCell className="text-xs max-w-[100px] truncate">{item.loja || "—"}</TableCell>
-                                    <TableCell className="text-xs">{item.cnpj || "—"}</TableCell>
-                                    <TableCell className="text-xs text-right">{item.quantidade_pedidos ?? "—"}</TableCell>
+                                    <TableCell className="text-xs">{item.numero_pedido || "—"}</TableCell>
                                     <TableCell className="text-xs text-right">{fmt(item.valor_pdv)}</TableCell>
-                                    <TableCell className="text-xs text-right">{fmt(item.valor_bruto)}</TableCell>
-                                    <TableCell className="text-xs text-right text-destructive">-{fmt(item.desconto)}</TableCell>
-                                    <TableCell className="text-xs text-right text-destructive">-{fmt(item.taxa)}</TableCell>
-                                    <TableCell className="text-xs text-right text-destructive">-{fmt(item.valor_taxa_entrega)}</TableCell>
-                                    <TableCell className="text-xs text-right font-semibold">{fmt(item.valor_liquido)}</TableCell>
+                                    <TableCell className="text-xs text-right">{fmt(item.valor_taxa_entrega)}</TableCell>
+                                    <TableCell className="text-xs text-right">{fmt(item.incentivo_ifood)}</TableCell>
+                                    <TableCell className="text-xs text-right text-destructive">{fmt(item.incentivo_loja)}</TableCell>
+                                    <TableCell className="text-xs text-right">{fmt(item.taxa_servico)}</TableCell>
+                                    <TableCell className="text-xs text-right text-destructive">{fmt(item.taxas_comissoes)}</TableCell>
+                                    <TableCell className="text-xs text-right">{fmt(item.valor_liquido)}</TableCell>
+                                    <TableCell className="text-xs text-right font-bold text-primary bg-primary/10">{fmt(item.valor_liquido_conciliado)}</TableCell>
                                   </TableRow>
                                 ))}
                               </TableBody>

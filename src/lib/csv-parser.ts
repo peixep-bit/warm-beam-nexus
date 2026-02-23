@@ -12,6 +12,12 @@ export interface ParsedRow {
   valor_liquido: number;
   numero_pedido: string;
   forma_pagamento: string;
+  incentivo_ifood: number;
+  incentivo_loja: number;
+  incentivo_rede: number;
+  taxa_servico: number;
+  taxas_comissoes: number;
+  valor_liquido_conciliado: number;
 }
 
 function parseNumber(value: string | number | undefined | null): number {
@@ -55,45 +61,46 @@ function rowFromRecord(row: Record<string, string | number>): ParsedRow {
     return "";
   };
 
-  // iFood: TAXAS E COMISSOES (negativo no arquivo) + TAXA DE SERVIÇO
+  // iFood: TAXAS E COMISSOES (negativo no arquivo)
   const taxasComissoes = parseNumber(get(
     "taxas_e_comissoes__r__", "taxas_e_comissoes", "comissoes", "comissao",
-    "taxa", "taxa_plataforma", "taxa_servico", "comissao_plataforma", "fee"
+    "taxa_plataforma", "comissao_plataforma", "fee"
   ));
-  const taxaServico = parseNumber(get("taxa_de_servico__r__", "taxa_de_servico", "taxa_servico"));
-  // taxasComissoes vem negativo no iFood, pegamos o absoluto
+  // iFood: TAXA DE SERVIÇO
+  const taxaServico = parseNumber(get("taxa_de_servico__r__", "taxa_de_servico"));
+  // taxa total = absoluto das comissões + taxa de serviço
   const taxa = Math.abs(taxasComissoes) + taxaServico;
 
-  // iFood: incentivo iFood + incentivo loja + incentivo rede = desconto total
+  // iFood: incentivos individuais
   const incIFood = parseNumber(get("incentivo_promocional_do_ifood__r__", "incentivo_promocional_do_ifood", "incentivo_ifood"));
   const incLoja  = parseNumber(get("incentivo_promocional_da_loja__r__",  "incentivo_promocional_da_loja",  "incentivo_loja"));
   const incRede  = parseNumber(get("incentivo_promocional_da_rede__r__",  "incentivo_promocional_da_rede",  "incentivo_rede"));
   const descontoExplicito = Math.abs(parseNumber(get("desconto", "discount", "promocao", "valor_desconto", "descontos")));
   const desconto = descontoExplicito || (incIFood + incLoja + incRede);
 
+  // Valor dos itens (PDV)
+  const valorPdv = parseNumber(get(
+    "valor_dos_itens__r__", "valor_dos_itens", "valor_pdv", "pdv",
+    "faturado_pdv", "valor_cardapio", "preco_cardapio"
+  ));
+
+  // Valor líquido conciliado = VALOR DOS ITENS + INCENTIVO LOJA (neg) + TAXAS E COMISSOES (neg)
+  // taxasComissoes já vem negativo do iFood, incLoja é positivo mas é dedução
+  const valorLiquidoConciliado = valorPdv - incLoja + taxasComissoes;
+
   return {
-    // iFood: "DATA E HORA DO PEDIDO" → normalizado para YYYY-MM-DD
     data_transacao: parseDate(get(
       "data_e_hora_do_pedido", "data_transacao", "data", "date", "data_pedido", "data_venda"
     )),
-    // iFood: "NOME DA LOJA"
     loja: String(get("nome_da_loja", "loja", "nome_loja", "store", "estabelecimento", "restaurante") || ""),
-    // iFood: "ID DA LOJA" como identificador (pode ser CNPJ em outras plataformas)
     cnpj: String(get("cnpj", "cnpj_loja", "documento", "id_da_loja") || ""),
-    // iFood: "STATUS FINAL DO PEDIDO" como descrição
     descricao: String(get(
       "status_final_do_pedido", "descricao", "description", "desc", "produto", "status"
     ) || ""),
-    // iFood: cada linha = 1 pedido por padrão
     quantidade_pedidos: parseInteger(get(
       "quantidade_pedidos", "qtd_pedidos", "pedidos", "orders", "qtd", "quantidade"
     )) || 1,
-    // iFood: "VALOR DOS ITENS (R$)" = valor no cardápio / PDV
-    valor_pdv: parseNumber(get(
-      "valor_dos_itens__r__", "valor_dos_itens", "valor_pdv", "pdv",
-      "faturado_pdv", "valor_cardapio", "preco_cardapio"
-    )),
-    // iFood: "TOTAL PAGO PELO CLIENTE (R$)" = valor bruto
+    valor_pdv: valorPdv,
     valor_bruto: parseNumber(get(
       "total_pago_pelo_cliente__r__", "total_pago_pelo_cliente",
       "valor_bruto", "valor", "bruto", "gross", "subtotal", "total_pedido"
@@ -118,6 +125,12 @@ function rowFromRecord(row: Record<string, string | number>): ParsedRow {
     forma_pagamento: String(get(
       "forma_de_pagamento", "forma_pagamento", "pagamento", "payment", "metodo_pagamento"
     ) || ""),
+    incentivo_ifood: incIFood,
+    incentivo_loja: incLoja,
+    incentivo_rede: incRede,
+    taxa_servico: taxaServico,
+    taxas_comissoes: taxasComissoes,
+    valor_liquido_conciliado: valorLiquidoConciliado,
   };
 }
 

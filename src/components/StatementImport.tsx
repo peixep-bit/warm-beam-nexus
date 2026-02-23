@@ -11,12 +11,16 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, FileSpreadsheet } from "lucide-react";
 
+const MARCAS = ["Aima", "SU", "Outra"];
+
 export function StatementImport() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [platformId, setPlatformId] = useState("");
+  const [sourceType, setSourceType] = useState<"extrato" | "pdv">("extrato");
+  const [marca, setMarca] = useState("");
   const [fileName, setFileName] = useState("");
   const [cnpj, setCnpj] = useState("");
   const [loja, setLoja] = useState("");
@@ -51,6 +55,7 @@ export function StatementImport() {
   const importMutation = useMutation({
     mutationFn: async () => {
       if (!platformId || parsedData.length === 0) throw new Error("Selecione plataforma e arquivo");
+      if (!marca) throw new Error("Selecione a marca");
 
       const sum = (key: string) => parsedData.reduce((s: number, r: any) => s + (r[key] ?? 0), 0);
 
@@ -74,6 +79,8 @@ export function StatementImport() {
         period_start: dates[0] || null,
         period_end: dates[dates.length - 1] || null,
         status: "processado",
+        source_type: sourceType,
+        marca,
       }).select().single();
       if (impErr) throw impErr;
 
@@ -99,6 +106,7 @@ export function StatementImport() {
         taxa_servico: r.taxa_servico,
         taxas_comissoes: r.taxas_comissoes,
         valor_liquido_conciliado: r.valor_liquido_conciliado,
+        marca,
       }));
 
       const { error: itemsErr } = await supabase.from("statement_items").insert(items);
@@ -113,6 +121,7 @@ export function StatementImport() {
       setPlatformId("");
       setCnpj("");
       setLoja("");
+      setMarca("");
       if (fileRef.current) fileRef.current.value = "";
     },
     onError: (err: any) => toast({ title: "Erro", description: err.message, variant: "destructive" }),
@@ -129,31 +138,53 @@ export function StatementImport() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Tipo de Origem */}
+          <div>
+            <Label>Tipo de Origem</Label>
+            <Select value={sourceType} onValueChange={(v) => setSourceType(v as "extrato" | "pdv")}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="extrato">📄 Extrato Plataforma</SelectItem>
+                <SelectItem value="pdv">🖥️ Relatório PDV</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Plataforma */}
           <div>
             <Label>Plataforma</Label>
             <Select value={platformId} onValueChange={setPlatformId}>
-              <SelectTrigger><SelectValue placeholder="Selecione a plataforma" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
                 {platforms.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
+
+          {/* Marca */}
+          <div>
+            <Label>Marca</Label>
+            <Select value={marca} onValueChange={setMarca}>
+              <SelectTrigger><SelectValue placeholder="Selecione a marca" /></SelectTrigger>
+              <SelectContent>
+                {MARCAS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* CNPJ */}
           <div>
             <Label>CNPJ da Loja</Label>
-            <Input
-              placeholder="00.000.000/0001-00"
-              value={cnpj}
-              onChange={e => setCnpj(e.target.value)}
-            />
+            <Input placeholder="00.000.000/0001-00" value={cnpj} onChange={e => setCnpj(e.target.value)} />
           </div>
+
+          {/* Loja */}
           <div className="sm:col-span-2">
             <Label>Nome da Loja (opcional)</Label>
-            <Input
-              placeholder="Ex: Pizzaria Central"
-              value={loja}
-              onChange={e => setLoja(e.target.value)}
-            />
+            <Input placeholder="Ex: Pizzaria Central" value={loja} onChange={e => setLoja(e.target.value)} />
           </div>
         </div>
 
@@ -212,10 +243,10 @@ export function StatementImport() {
 
         <Button
           onClick={() => importMutation.mutate()}
-          disabled={!platformId || parsedData.length === 0 || importMutation.isPending || parsing}
+          disabled={!platformId || !marca || parsedData.length === 0 || importMutation.isPending || parsing}
           className="w-full"
         >
-          {importMutation.isPending ? "Importando..." : "Importar Extrato"}
+          {importMutation.isPending ? "Importando..." : `Importar ${sourceType === "pdv" ? "PDV" : "Extrato"}`}
         </Button>
       </CardContent>
     </Card>

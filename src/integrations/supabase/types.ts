@@ -89,9 +89,11 @@ export type Database = {
           file_name: string
           id: string
           loja: string | null
+          marca: string | null
           period_end: string | null
           period_start: string | null
           platform_id: string
+          source_type: string
           status: string
           total_bruto: number | null
           total_descontos: number | null
@@ -105,9 +107,11 @@ export type Database = {
           file_name: string
           id?: string
           loja?: string | null
+          marca?: string | null
           period_end?: string | null
           period_start?: string | null
           platform_id: string
+          source_type?: string
           status?: string
           total_bruto?: number | null
           total_descontos?: number | null
@@ -121,9 +125,11 @@ export type Database = {
           file_name?: string
           id?: string
           loja?: string | null
+          marca?: string | null
           period_end?: string | null
           period_start?: string | null
           platform_id?: string
+          source_type?: string
           status?: string
           total_bruto?: number | null
           total_descontos?: number | null
@@ -155,6 +161,7 @@ export type Database = {
           incentivo_loja: number | null
           incentivo_rede: number | null
           loja: string | null
+          marca: string | null
           numero_pedido: string | null
           quantidade_pedidos: number | null
           status: string | null
@@ -181,6 +188,7 @@ export type Database = {
           incentivo_loja?: number | null
           incentivo_rede?: number | null
           loja?: string | null
+          marca?: string | null
           numero_pedido?: string | null
           quantidade_pedidos?: number | null
           status?: string | null
@@ -207,6 +215,7 @@ export type Database = {
           incentivo_loja?: number | null
           incentivo_rede?: number | null
           loja?: string | null
+          marca?: string | null
           numero_pedido?: string | null
           quantidade_pedidos?: number | null
           status?: string | null

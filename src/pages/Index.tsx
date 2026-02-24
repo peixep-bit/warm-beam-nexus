@@ -7,6 +7,7 @@ import { StatementImport } from "@/components/StatementImport";
 import { ImportsList } from "@/components/ImportsList";
 import { PlatformManager } from "@/components/PlatformManager";
 import { FeeRulesManager } from "@/components/FeeRulesManager";
+import { ReconciliationDashboard } from "@/components/ReconciliationDashboard";
 import { Utensils, LogOut } from "lucide-react";
 
 export default function Index() {
@@ -37,14 +38,18 @@ export default function Index() {
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         <DashboardSummary />
 
-        <Tabs defaultValue="import" className="space-y-4">
+        <Tabs defaultValue="conciliacao" className="space-y-4">
           <TabsList>
+            <TabsTrigger value="conciliacao">Conciliação</TabsTrigger>
             <TabsTrigger value="import">Importar</TabsTrigger>
             <TabsTrigger value="history">Histórico</TabsTrigger>
             <TabsTrigger value="platforms">Plataformas</TabsTrigger>
             <TabsTrigger value="rules">Regras de Taxas</TabsTrigger>
           </TabsList>
 
+          <TabsContent value="conciliacao">
+            <ReconciliationDashboard />
+          </TabsContent>
           <TabsContent value="import">
             <StatementImport />
           </TabsContent>

@@ -84,9 +84,9 @@ function rowFromRecord(row: Record<string, string | number>): ParsedRow {
     "faturado_pdv", "valor_cardapio", "preco_cardapio"
   ));
 
-  // Valor líquido conciliado = VALOR DOS ITENS + INCENTIVO LOJA (neg) + TAXAS E COMISSOES (neg)
-  // taxasComissoes já vem negativo do iFood, incLoja é positivo mas é dedução
-  const valorLiquidoConciliado = valorPdv - incLoja + taxasComissoes;
+  // Valor líquido conciliado = VALOR DOS ITENS + INCENTIVO LOJA + TAXAS E COMISSOES
+  // incLoja e taxasComissoes vêm negativos do iFood, são somados diretamente
+  const valorLiquidoConciliado = valorPdv + incLoja + taxasComissoes;
 
   return {
     data_transacao: parseDate(get(

@@ -4,12 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { parseFile } from "@/lib/csv-parser";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileSpreadsheet } from "lucide-react";
+import { Upload, FileSpreadsheet, CheckCircle } from "lucide-react";
 
 const MARCAS = ["Aima", "SU", "Outra"];
 
@@ -58,12 +58,6 @@ export function StatementImport() {
       if (!marca) throw new Error("Selecione a marca");
 
       const sum = (key: string) => parsedData.reduce((s: number, r: any) => s + (r[key] ?? 0), 0);
-
-      const totalBruto = sum("valor_bruto");
-      const totalTaxas = sum("taxa");
-      const totalDescontos = sum("desconto");
-      const totalRepasse = sum("valor_liquido");
-
       const dates = parsedData.map((r: any) => r.data_transacao).filter(Boolean).sort();
 
       const { data: imp, error: impErr } = await supabase.from("statement_imports").insert({
@@ -72,10 +66,10 @@ export function StatementImport() {
         file_name: fileName,
         cnpj: cnpj || null,
         loja: loja || null,
-        total_bruto: totalBruto,
-        total_taxas: totalTaxas,
-        total_descontos: totalDescontos,
-        total_repasse: totalRepasse,
+        total_bruto: sum("valor_bruto"),
+        total_taxas: sum("taxa"),
+        total_descontos: sum("desconto"),
+        total_repasse: sum("valor_liquido"),
         period_start: dates[0] || null,
         period_end: dates[dates.length - 1] || null,
         status: "processado",
@@ -114,8 +108,9 @@ export function StatementImport() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["imports"] });
+      queryClient.invalidateQueries({ queryKey: ["reconciliation-items"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      toast({ title: "Extrato importado com sucesso!" });
+      toast({ title: "Extrato importado!", description: "Vá para Conciliação para conferir." });
       setParsedData([]);
       setFileName("");
       setPlatformId("");
@@ -127,117 +122,63 @@ export function StatementImport() {
     onError: (err: any) => toast({ title: "Erro", description: err.message, variant: "destructive" }),
   });
 
-  const fmt = (v: number) => `R$ ${v.toFixed(2)}`;
+  const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const sum = (key: string) => parsedData.reduce((s: number, r: any) => s + (r[key] ?? 0), 0);
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Upload className="h-5 w-5" /> Importar Extrato
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Tipo de Origem */}
+      <CardContent className="pt-6 space-y-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div>
-            <Label>Tipo de Origem</Label>
+            <Label className="text-xs">Tipo</Label>
             <Select value={sourceType} onValueChange={(v) => setSourceType(v as "extrato" | "pdv")}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="extrato">📄 Extrato Plataforma</SelectItem>
-                <SelectItem value="pdv">🖥️ Relatório PDV</SelectItem>
+                <SelectItem value="extrato">📄 Extrato</SelectItem>
+                <SelectItem value="pdv">🖥️ PDV</SelectItem>
               </SelectContent>
             </Select>
           </div>
-
-          {/* Plataforma */}
           <div>
-            <Label>Plataforma</Label>
+            <Label className="text-xs">Plataforma</Label>
             <Select value={platformId} onValueChange={setPlatformId}>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
                 {platforms.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
-
-          {/* Marca */}
           <div>
-            <Label>Marca</Label>
+            <Label className="text-xs">Marca</Label>
             <Select value={marca} onValueChange={setMarca}>
-              <SelectTrigger><SelectValue placeholder="Selecione a marca" /></SelectTrigger>
+              <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
                 {MARCAS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
-
-          {/* CNPJ */}
           <div>
-            <Label>CNPJ da Loja</Label>
-            <Input placeholder="00.000.000/0001-00" value={cnpj} onChange={e => setCnpj(e.target.value)} />
+            <Label className="text-xs">CNPJ</Label>
+            <Input placeholder="00.000.000/0001-00" value={cnpj} onChange={e => setCnpj(e.target.value)} className="mt-1 h-9" />
           </div>
-
-          {/* Loja */}
-          <div className="sm:col-span-2">
-            <Label>Nome da Loja (opcional)</Label>
-            <Input placeholder="Ex: Pizzaria Central" value={loja} onChange={e => setLoja(e.target.value)} />
+          <div className="col-span-2">
+            <Label className="text-xs">Loja (opcional)</Label>
+            <Input placeholder="Ex: Pizzaria Central" value={loja} onChange={e => setLoja(e.target.value)} className="mt-1 h-9" />
           </div>
         </div>
 
-        <div>
-          <Label>Arquivo CSV ou Excel (.xlsx)</Label>
-          <div className="mt-1">
-            <label className="flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border p-6 cursor-pointer hover:border-primary/50 transition-colors">
-              <FileSpreadsheet className="h-6 w-6 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">
-                {parsing ? "Processando..." : (fileName || "Clique para selecionar .csv ou .xlsx")}
-              </span>
-              <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} className="hidden" />
-            </label>
-          </div>
-        </div>
+        <label className="flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border p-4 cursor-pointer hover:border-primary/50 transition-colors">
+          <FileSpreadsheet className="h-5 w-5 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">
+            {parsing ? "Processando..." : (fileName || "Selecionar .csv ou .xlsx")}
+          </span>
+          <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} className="hidden" />
+        </label>
 
         {parsedData.length > 0 && (
-          <div className="rounded-lg bg-muted p-4 space-y-2 text-sm">
-            <p className="font-semibold text-foreground">{parsedData.length} linhas encontradas</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div>
-                <p className="text-muted-foreground text-xs">Pedidos</p>
-                <p className="font-medium">{sum("quantidade_pedidos")}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-xs">Valor Itens (PDV)</p>
-                <p className="font-medium">{fmt(sum("valor_pdv"))}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-xs">Taxa Entrega Cliente</p>
-                <p className="font-medium">{fmt(sum("valor_taxa_entrega"))}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-xs">Incentivo iFood</p>
-                <p className="font-medium">{fmt(sum("incentivo_ifood"))}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-xs">Incentivo Loja</p>
-                <p className="font-medium text-destructive">{fmt(sum("incentivo_loja"))}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-xs">Taxa Serviço</p>
-                <p className="font-medium">{fmt(sum("taxa_servico"))}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-xs">Taxas e Comissões</p>
-                <p className="font-medium text-destructive">{fmt(sum("taxas_comissoes"))}</p>
-              </div>
-              <div className="col-span-2 sm:col-span-4 border-t pt-2 mt-1 bg-primary/10 rounded p-2">
-                <p className="text-muted-foreground text-xs font-semibold">💰 Líquido Conciliado (Itens + Inc. Loja + Comissões)</p>
-                <p className="font-bold text-lg text-primary">{fmt(sum("valor_liquido_conciliado"))}</p>
-              </div>
-            </div>
+          <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3 text-sm">
+            <CheckCircle className="h-4 w-4 text-primary shrink-0" />
+            <span><strong>{parsedData.length}</strong> linhas · Itens: {fmt(sum("valor_pdv"))} · Líquido: {fmt(sum("valor_liquido"))}</span>
           </div>
         )}
 
@@ -245,8 +186,10 @@ export function StatementImport() {
           onClick={() => importMutation.mutate()}
           disabled={!platformId || !marca || parsedData.length === 0 || importMutation.isPending || parsing}
           className="w-full"
+          size="sm"
         >
-          {importMutation.isPending ? "Importando..." : `Importar ${sourceType === "pdv" ? "PDV" : "Extrato"}`}
+          <Upload className="h-4 w-4 mr-2" />
+          {importMutation.isPending ? "Importando..." : "Importar"}
         </Button>
       </CardContent>
     </Card>

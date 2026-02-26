@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,8 +10,6 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, FileSpreadsheet, CheckCircle } from "lucide-react";
-
-const MARCAS = ["Aima", "SU", "Outra"];
 
 export function StatementImport() {
   const { user } = useAuth();
@@ -36,6 +34,33 @@ export function StatementImport() {
     },
   });
 
+  // Detect marcas from parsed file data
+  const detectedMarcas = useMemo(() => {
+    const set = new Set<string>();
+    parsedData.forEach((r: any) => {
+      if (r.marca) set.add(r.marca);
+    });
+    return Array.from(set).sort();
+  }, [parsedData]);
+
+  // Detect parceiro (platform) from parsed file data
+  const detectedParceiro = useMemo(() => {
+    const set = new Set<string>();
+    parsedData.forEach((r: any) => {
+      if (r.parceiro) set.add(r.parceiro);
+    });
+    return Array.from(set);
+  }, [parsedData]);
+
+  // Detect loja from parsed file data
+  const detectedLoja = useMemo(() => {
+    const set = new Set<string>();
+    parsedData.forEach((r: any) => {
+      if (r.loja) set.add(r.loja);
+    });
+    return Array.from(set);
+  }, [parsedData]);
+
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -44,6 +69,9 @@ export function StatementImport() {
     try {
       const rows = await parseFile(file);
       setParsedData(rows);
+      // Auto-detect loja from file
+      const lojas = new Set(rows.map((r: any) => r.loja).filter(Boolean));
+      if (lojas.size === 1) setLoja(Array.from(lojas)[0]);
       toast({ title: `${rows.length} linhas encontradas` });
     } catch (err: any) {
       toast({ title: "Erro ao ler arquivo", description: err.message, variant: "destructive" });
@@ -55,10 +83,18 @@ export function StatementImport() {
   const importMutation = useMutation({
     mutationFn: async () => {
       if (!platformId || parsedData.length === 0) throw new Error("Selecione plataforma e arquivo");
-      if (!marca) throw new Error("Selecione a marca");
 
-      const sum = (key: string) => parsedData.reduce((s: number, r: any) => s + (r[key] ?? 0), 0);
-      const dates = parsedData.map((r: any) => r.data_transacao).filter(Boolean).sort();
+      // Filter by selected marca if applicable
+      const dataToImport = marca
+        ? parsedData.filter((r: any) => r.marca === marca)
+        : parsedData;
+
+      if (dataToImport.length === 0) throw new Error("Nenhuma linha para a marca selecionada");
+
+      const effectiveMarca = marca || detectedMarcas[0] || "";
+
+      const sum = (key: string) => dataToImport.reduce((s: number, r: any) => s + (r[key] ?? 0), 0);
+      const dates = dataToImport.map((r: any) => r.data_transacao).filter(Boolean).sort();
 
       const { data: imp, error: impErr } = await supabase.from("statement_imports").insert({
         user_id: user!.id,
@@ -74,11 +110,11 @@ export function StatementImport() {
         period_end: dates[dates.length - 1] || null,
         status: "processado",
         source_type: sourceType,
-        marca,
+        marca: effectiveMarca,
       }).select().single();
       if (impErr) throw impErr;
 
-      const items = parsedData.map((r: any) => ({
+      const items = dataToImport.map((r: any) => ({
         import_id: imp.id,
         user_id: user!.id,
         data_transacao: r.data_transacao,
@@ -100,11 +136,15 @@ export function StatementImport() {
         taxa_servico: r.taxa_servico,
         taxas_comissoes: r.taxas_comissoes,
         valor_liquido_conciliado: r.valor_liquido_conciliado,
-        marca,
+        marca: r.marca || effectiveMarca,
       }));
 
-      const { error: itemsErr } = await supabase.from("statement_items").insert(items);
-      if (itemsErr) throw itemsErr;
+      // Insert in batches of 500
+      for (let i = 0; i < items.length; i += 500) {
+        const batch = items.slice(i, i + 500);
+        const { error: itemsErr } = await supabase.from("statement_items").insert(batch);
+        if (itemsErr) throw itemsErr;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["imports"] });
@@ -149,21 +189,8 @@ export function StatementImport() {
             </Select>
           </div>
           <div>
-            <Label className="text-xs">Marca</Label>
-            <Select value={marca} onValueChange={setMarca}>
-              <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                {MARCAS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
             <Label className="text-xs">CNPJ</Label>
             <Input placeholder="00.000.000/0001-00" value={cnpj} onChange={e => setCnpj(e.target.value)} className="mt-1 h-9" />
-          </div>
-          <div className="col-span-2">
-            <Label className="text-xs">Loja (opcional)</Label>
-            <Input placeholder="Ex: Pizzaria Central" value={loja} onChange={e => setLoja(e.target.value)} className="mt-1 h-9" />
           </div>
         </div>
 
@@ -175,16 +202,47 @@ export function StatementImport() {
           <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} className="hidden" />
         </label>
 
+        {/* File detection info */}
         {parsedData.length > 0 && (
-          <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3 text-sm">
-            <CheckCircle className="h-4 w-4 text-primary shrink-0" />
-            <span><strong>{parsedData.length}</strong> linhas · Itens: {fmt(sum("valor_pdv"))} · Líquido: {fmt(sum("valor_liquido"))}</span>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3 text-sm">
+              <CheckCircle className="h-4 w-4 text-primary shrink-0" />
+              <div>
+                <p><strong>{parsedData.length}</strong> linhas · Itens: {fmt(sum("valor_pdv"))} · Líquido: {fmt(sum("valor_liquido"))}</p>
+                {detectedLoja.length > 0 && (
+                  <p className="text-xs text-muted-foreground">Loja: {detectedLoja.join(", ")}</p>
+                )}
+                {detectedParceiro.length > 0 && (
+                  <p className="text-xs text-muted-foreground">Parceiro: {detectedParceiro.join(", ")}</p>
+                )}
+                {detectedMarcas.length > 0 && (
+                  <p className="text-xs text-muted-foreground">Marcas: {detectedMarcas.join(", ")}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Marca filter when multiple detected */}
+            {detectedMarcas.length > 1 && (
+              <div>
+                <Label className="text-xs">Importar marca específica (opcional)</Label>
+                <Select value={marca} onValueChange={setMarca}>
+                  <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="Todas as marcas" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">Todas ({parsedData.length} linhas)</SelectItem>
+                    {detectedMarcas.map(m => {
+                      const count = parsedData.filter((r: any) => r.marca === m).length;
+                      return <SelectItem key={m} value={m}>{m} ({count} linhas)</SelectItem>;
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         )}
 
         <Button
           onClick={() => importMutation.mutate()}
-          disabled={!platformId || !marca || parsedData.length === 0 || importMutation.isPending || parsing}
+          disabled={!platformId || parsedData.length === 0 || importMutation.isPending || parsing}
           className="w-full"
           size="sm"
         >

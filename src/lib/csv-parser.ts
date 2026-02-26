@@ -61,6 +61,57 @@ function rowFromRecord(row: Record<string, string | number>): ParsedRow {
     return "";
   };
 
+  // --- Detect layout: PDV/Delivery report vs iFood extract ---
+  const isDeliveryReport = row["parceiro"] !== undefined || row["marca"] !== undefined
+    || row["total_em_produtos"] !== undefined || row["total_pago_no_parceiro"] !== undefined;
+
+  if (isDeliveryReport) {
+    // Delivery report layout (DK Barra Funda, etc.)
+    const totalProdutos = parseNumber(get("total_em_produtos"));
+    const descontoLojaVenda = parseNumber(get("desconto_loja_em_venda"));
+    const descontoLojaProdutos = parseNumber(get("desconto_loja_em_produtos"));
+    const descontoLojaTaxaEntrega = parseNumber(get("desconto_loja_em_taxa_de_entrega"));
+    const descontoParceiroVenda = parseNumber(get("desconto_parceiro_em_venda"));
+    const descontoParceiroProdutos = parseNumber(get("desconto_parceiro_em_produtos"));
+    const descontoParceiroTaxaEntrega = parseNumber(get("desconto_parceiro_em_taxa_de_entrega"));
+    const taxaEntrega = parseNumber(get("taxa_de_entrega"));
+    const totalPagoNoParceiro = parseNumber(get("total_pago_no_parceiro"));
+    const totalFaturadoPDV = parseNumber(get("total_do_faturado_no_pdv"));
+
+    const incentivoLoja = -(descontoLojaVenda + descontoLojaProdutos + descontoLojaTaxaEntrega);
+    const incentivoParceiro = -(descontoParceiroVenda + descontoParceiroProdutos + descontoParceiroTaxaEntrega);
+    const desconto = Math.abs(incentivoLoja) + Math.abs(incentivoParceiro);
+
+    // valor_liquido_conciliado = Total Produtos + Incentivo Loja (negativo)
+    const valorLiquidoConciliado = totalProdutos + incentivoLoja;
+
+    return {
+      data_transacao: parseDate(get("data")),
+      loja: String(get("loja") || ""),
+      cnpj: "",
+      descricao: String(get("status_no_parceiro__referente_ao_id_de_status_no_sac_", "status_no_parceiro", "status_no_pdv") || ""),
+      quantidade_pedidos: 1,
+      valor_pdv: totalProdutos,
+      valor_bruto: totalPagoNoParceiro || totalFaturadoPDV || totalProdutos,
+      desconto,
+      taxa: 0,
+      valor_taxa_entrega: taxaEntrega,
+      valor_liquido: totalPagoNoParceiro,
+      numero_pedido: String(get("numero_do_pedido_no_parceiro", "numero_do_pedido_no_pdv") || ""),
+      forma_pagamento: String(get("forma_de_pagamento_no_parceiro", "forma_pagamento") || ""),
+      incentivo_ifood: incentivoParceiro,
+      incentivo_loja: incentivoLoja,
+      incentivo_rede: 0,
+      taxa_servico: 0,
+      taxas_comissoes: 0,
+      valor_liquido_conciliado: valorLiquidoConciliado,
+      // Extra fields stored via the marca column in the file
+      marca: String(get("marca") || ""),
+      parceiro: String(get("parceiro") || ""),
+    } as ParsedRow & { marca?: string; parceiro?: string };
+  }
+
+  // --- Original iFood extract layout ---
   // iFood: TAXAS E COMISSOES (negativo no arquivo)
   const taxasComissoes = parseNumber(get(
     "taxas_e_comissoes__r__", "taxas_e_comissoes", "comissoes", "comissao",
@@ -85,7 +136,6 @@ function rowFromRecord(row: Record<string, string | number>): ParsedRow {
   ));
 
   // Valor líquido conciliado = VALOR DOS ITENS + INCENTIVO LOJA + TAXAS E COMISSOES
-  // incLoja e taxasComissoes vêm negativos do iFood, são somados diretamente
   const valorLiquidoConciliado = valorPdv + incLoja + taxasComissoes;
 
   return {
@@ -107,21 +157,17 @@ function rowFromRecord(row: Record<string, string | number>): ParsedRow {
     )),
     desconto,
     taxa,
-    // iFood: "TAXA DE ENTREGA PAGA PELO CLIENTE (R$)"
     valor_taxa_entrega: parseNumber(get(
       "taxa_de_entrega_paga_pelo_cliente__r__", "taxa_de_entrega_paga_pelo_cliente",
       "taxa_entrega", "valor_taxa_entrega", "frete", "delivery_fee", "entrega"
     )),
-    // iFood: "VALOR LIQUIDO (R$)"
     valor_liquido: parseNumber(get(
       "valor_liquido__r__", "valor_liquido", "liquido", "net", "repasse", "valor_repasse", "total_liquido"
     )),
-    // iFood: "ID CURTO DO PEDIDO"
     numero_pedido: String(get(
       "id_curto_do_pedido", "id_completo_do_pedido", "pedido", "numero_pedido",
       "order", "id_pedido", "cod_pedido", "codigo_pedido"
     ) || ""),
-    // iFood: "FORMA DE PAGAMENTO"
     forma_pagamento: String(get(
       "forma_de_pagamento", "forma_pagamento", "pagamento", "payment", "metodo_pagamento"
     ) || ""),

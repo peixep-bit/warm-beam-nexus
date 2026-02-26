@@ -33,29 +33,35 @@ export function ReconciliationDashboard() {
     },
   });
 
-  // Extract unique CNPJs/marcas
-  const cnpjOptions = useMemo(() => {
+  // Extract unique Marcas from imported data
+  const marcaOptions = useMemo(() => {
     const set = new Map<string, string>();
     allItems.forEach((i: any) => {
-      if (i.marca) set.set(i.marca, i.marca + (i.cnpj ? ` (${i.cnpj})` : ""));
-      else if (i.cnpj) set.set(i.cnpj, i.cnpj);
+      const key = i.marca || i.cnpj || "";
+      if (!key) return;
+      const label = i.marca
+        ? i.marca + (i.loja ? ` — ${i.loja}` : "") + (i.cnpj ? ` (${i.cnpj})` : "")
+        : i.cnpj || "";
+      if (!set.has(key)) set.set(key, label);
     });
     return Array.from(set.entries()).map(([value, label]) => ({ value, label }));
   }, [allItems]);
 
-  const itemsForCnpj = useMemo(() => {
+  const itemsForMarca = useMemo(() => {
     if (!selectedCnpj) return [];
     return allItems.filter((i: any) => i.marca === selectedCnpj || i.cnpj === selectedCnpj);
   }, [allItems, selectedCnpj]);
 
-  const dateOptions = useMemo(() =>
-    [...new Set(itemsForCnpj.map((i: any) => i.data_transacao))].sort(),
-  [itemsForCnpj]);
+  const dateOptions = useMemo(() => {
+    const dates = itemsForMarca.map((i: any) => String(i.data_transacao));
+    return [...new Set(dates)].sort();
+  },
+  [itemsForMarca]);
 
   const dayItems = useMemo(() => {
     if (!selectedDate) return [];
-    return itemsForCnpj.filter((i: any) => i.data_transacao === selectedDate);
-  }, [itemsForCnpj, selectedDate]);
+    return itemsForMarca.filter((i: any) => i.data_transacao === selectedDate);
+  }, [itemsForMarca, selectedDate]);
 
   const displayItems = useMemo(() => {
     if (!searchPedido) return dayItems;
@@ -90,11 +96,11 @@ export function ReconciliationDashboard() {
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <Label className="text-xs font-medium text-muted-foreground">Marca / CNPJ</Label>
+              <Label className="text-xs font-medium text-muted-foreground">Marca</Label>
               <Select value={selectedCnpj} onValueChange={(v) => { setSelectedCnpj(v); setSelectedDate(""); }}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  {cnpjOptions.map((o) => (
+                  {marcaOptions.map((o) => (
                     <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                   ))}
                 </SelectContent>

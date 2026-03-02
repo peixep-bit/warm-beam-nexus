@@ -78,12 +78,14 @@ function rowFromRecord(row: Record<string, string | number>): ParsedRow {
     const totalPagoNoParceiro = parseNumber(get("total_pago_no_parceiro"));
     const totalFaturadoPDV = parseNumber(get("total_do_faturado_no_pdv"));
 
-    const incentivoLoja = -(descontoLojaVenda + descontoLojaProdutos + descontoLojaTaxaEntrega);
-    const incentivoParceiro = -(descontoParceiroVenda + descontoParceiroProdutos + descontoParceiroTaxaEntrega);
-    const desconto = Math.abs(incentivoLoja) + Math.abs(incentivoParceiro);
+    // Incentivo loja = descontos em venda + produtos (sem taxa de entrega)
+    const incentivoLoja = -(descontoLojaVenda + descontoLojaProdutos);
+    const incentivoParceiro = -(descontoParceiroVenda + descontoParceiroProdutos);
+    // Desconto = descontos sobre taxa de entrega (loja + parceiro)
+    const desconto = descontoLojaTaxaEntrega + descontoParceiroTaxaEntrega;
 
-    // valor_liquido_conciliado = Total Produtos + Incentivo Loja (negativo)
-    const valorLiquidoConciliado = totalProdutos + incentivoLoja;
+    // valor_liquido_conciliado = Total Produtos + Incentivo Loja + Taxa Entrega - Desconto
+    const valorLiquidoConciliado = totalProdutos + incentivoLoja + taxaEntrega - desconto;
 
     return {
       data_transacao: parseDate(get("data")),
@@ -135,8 +137,12 @@ function rowFromRecord(row: Record<string, string | number>): ParsedRow {
     "faturado_pdv", "valor_cardapio", "preco_cardapio"
   ));
 
-  // Valor líquido conciliado = VALOR DOS ITENS + INCENTIVO LOJA + TAXAS E COMISSOES
-  const valorLiquidoConciliado = valorPdv + incLoja + taxasComissoes;
+  // Valor líquido conciliado = VALOR DOS ITENS + INCENTIVO LOJA + TAXAS E COMISSOES + TAXA ENTREGA - DESCONTO
+  const taxaEntrega = parseNumber(get(
+    "taxa_de_entrega_paga_pelo_cliente__r__", "taxa_de_entrega_paga_pelo_cliente",
+    "taxa_entrega", "valor_taxa_entrega", "frete", "delivery_fee", "entrega"
+  ));
+  const valorLiquidoConciliado = valorPdv + incLoja + taxasComissoes + taxaEntrega - desconto;
 
   return {
     data_transacao: parseDate(get(
@@ -157,10 +163,7 @@ function rowFromRecord(row: Record<string, string | number>): ParsedRow {
     )),
     desconto,
     taxa,
-    valor_taxa_entrega: parseNumber(get(
-      "taxa_de_entrega_paga_pelo_cliente__r__", "taxa_de_entrega_paga_pelo_cliente",
-      "taxa_entrega", "valor_taxa_entrega", "frete", "delivery_fee", "entrega"
-    )),
+    valor_taxa_entrega: taxaEntrega,
     valor_liquido: parseNumber(get(
       "valor_liquido__r__", "valor_liquido", "liquido", "net", "repasse", "valor_repasse", "total_liquido"
     )),

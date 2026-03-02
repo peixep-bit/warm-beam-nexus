@@ -1,13 +1,16 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, ChevronDown, ChevronUp, Search, Filter } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
+import { FileText, ChevronDown, ChevronUp, Search, Filter, Trash2 } from "lucide-react";
 
 const STATUS_MAP: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   pendente: { label: "Pendente", variant: "outline" },
@@ -22,12 +25,32 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 export function ImportsList() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [searchPedido, setSearchPedido] = useState("");
   const [filterMarca, setFilterMarca] = useState("all");
   const [filterSourceType, setFilterSourceType] = useState("all");
   const [filterDateStart, setFilterDateStart] = useState("");
   const [filterDateEnd, setFilterDateEnd] = useState("");
+
+  const deleteMutation = useMutation({
+    mutationFn: async (importId: string) => {
+      // Delete items first, then the import
+      const { error: itemsErr } = await supabase.from("statement_items").delete().eq("import_id", importId);
+      if (itemsErr) throw itemsErr;
+      const { error: impErr } = await supabase.from("statement_imports").delete().eq("id", importId);
+      if (impErr) throw impErr;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["imports"] });
+      queryClient.invalidateQueries({ queryKey: ["reconciliation-items"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      setExpandedId(null);
+      toast({ title: "Extrato excluído com sucesso" });
+    },
+    onError: (err: any) => toast({ title: "Erro ao excluir", description: err.message, variant: "destructive" }),
+  });
 
   const { data: imports = [] } = useQuery({
     queryKey: ["imports"],
@@ -167,6 +190,27 @@ export function ImportsList() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Badge variant={st.variant}>{st.label}</Badge>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={(e) => e.stopPropagation()}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Excluir extrato?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Isso removerá o extrato "{imp.file_name}" e todos os seus {imp.marca ? `itens da marca ${imp.marca}` : "itens"}. Esta ação não pode ser desfeita.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => deleteMutation.mutate(imp.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                              Excluir
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                       {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
                     </div>
                   </div>

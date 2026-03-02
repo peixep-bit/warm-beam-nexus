@@ -17,51 +17,63 @@ const fmtDate = (d: string) => {
 };
 
 export function ReconciliationDashboard() {
-  const [selectedCnpj, setSelectedCnpj] = useState("");
+  const [selectedMarca, setSelectedMarca] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [searchPedido, setSearchPedido] = useState("");
 
-  const { data: allItems = [] } = useQuery({
-    queryKey: ["reconciliation-items"],
+  // Fetch distinct marcas from DB (lightweight)
+  const { data: marcaOptions = [] } = useQuery({
+    queryKey: ["reconciliation-marcas"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("statement_items")
-        .select("*")
-        .order("data_transacao");
+        .select("marca, loja, cnpj");
       if (error) throw error;
-      return data;
+      const set = new Map<string, string>();
+      (data || []).forEach((i: any) => {
+        const key = i.marca || i.cnpj || "";
+        if (!key) return;
+        const label = i.marca
+          ? i.marca + (i.loja ? ` — ${i.loja}` : "") + (i.cnpj ? ` (${i.cnpj})` : "")
+          : i.cnpj || "";
+        if (!set.has(key)) set.set(key, label);
+      });
+      return Array.from(set.entries()).map(([value, label]) => ({ value, label }));
     },
   });
 
-  // Extract unique Marcas from imported data
-  const marcaOptions = useMemo(() => {
-    const set = new Map<string, string>();
-    allItems.forEach((i: any) => {
-      const key = i.marca || i.cnpj || "";
-      if (!key) return;
-      const label = i.marca
-        ? i.marca + (i.loja ? ` — ${i.loja}` : "") + (i.cnpj ? ` (${i.cnpj})` : "")
-        : i.cnpj || "";
-      if (!set.has(key)) set.set(key, label);
-    });
-    return Array.from(set.entries()).map(([value, label]) => ({ value, label }));
-  }, [allItems]);
+  // Fetch distinct dates for the selected marca
+  const { data: dateOptions = [] } = useQuery({
+    queryKey: ["reconciliation-dates", selectedMarca],
+    queryFn: async () => {
+      if (!selectedMarca) return [];
+      const { data, error } = await supabase
+        .from("statement_items")
+        .select("data_transacao")
+        .or(`marca.eq.${selectedMarca},cnpj.eq.${selectedMarca}`);
+      if (error) throw error;
+      const dates = [...new Set((data || []).map((i: any) => String(i.data_transacao)))].sort();
+      return dates;
+    },
+    enabled: !!selectedMarca,
+  });
 
-  const itemsForMarca = useMemo(() => {
-    if (!selectedCnpj) return [];
-    return allItems.filter((i: any) => i.marca === selectedCnpj || i.cnpj === selectedCnpj);
-  }, [allItems, selectedCnpj]);
-
-  const dateOptions = useMemo(() => {
-    const dates = itemsForMarca.map((i: any) => String(i.data_transacao));
-    return [...new Set(dates)].sort();
-  },
-  [itemsForMarca]);
-
-  const dayItems = useMemo(() => {
-    if (!selectedDate) return [];
-    return itemsForMarca.filter((i: any) => i.data_transacao === selectedDate);
-  }, [itemsForMarca, selectedDate]);
+  // Fetch items only for the selected marca + date (no limit issue)
+  const { data: dayItems = [] } = useQuery({
+    queryKey: ["reconciliation-day", selectedMarca, selectedDate],
+    queryFn: async () => {
+      if (!selectedMarca || !selectedDate) return [];
+      const { data, error } = await supabase
+        .from("statement_items")
+        .select("*")
+        .or(`marca.eq.${selectedMarca},cnpj.eq.${selectedMarca}`)
+        .eq("data_transacao", selectedDate)
+        .order("numero_pedido");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!selectedMarca && !!selectedDate,
+  });
 
   const displayItems = useMemo(() => {
     if (!searchPedido) return dayItems;
@@ -70,7 +82,6 @@ export function ReconciliationDashboard() {
     );
   }, [dayItems, searchPedido]);
 
-  // Totals — always computed live, never from stored value
   const totals = useMemo(() => {
     const sum = (key: string) => dayItems.reduce((s: number, i: any) => s + Number(i[key] ?? 0), 0);
     const valorItens = sum("valor_pdv");
@@ -97,7 +108,7 @@ export function ReconciliationDashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <Label className="text-xs font-medium text-muted-foreground">Marca</Label>
-              <Select value={selectedCnpj} onValueChange={(v) => { setSelectedCnpj(v); setSelectedDate(""); }}>
+              <Select value={selectedMarca} onValueChange={(v) => { setSelectedMarca(v); setSelectedDate(""); }}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {marcaOptions.map((o) => (
@@ -108,7 +119,7 @@ export function ReconciliationDashboard() {
             </div>
             <div>
               <Label className="text-xs font-medium text-muted-foreground">Dia</Label>
-              <Select value={selectedDate} onValueChange={setSelectedDate} disabled={!selectedCnpj}>
+              <Select value={selectedDate} onValueChange={setSelectedDate} disabled={!selectedMarca}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {dateOptions.map((d) => (
@@ -146,11 +157,10 @@ export function ReconciliationDashboard() {
               <div className="flex items-center justify-center gap-3 mt-3 text-xs text-muted-foreground">
                 <Badge variant="secondary">{totals.pedidos} pedido(s)</Badge>
                 <span>{fmtDate(selectedDate)}</span>
-                <span>{selectedCnpj}</span>
+                <span>{selectedMarca}</span>
               </div>
             </div>
 
-            {/* Breakdown inline */}
             <CardContent className="py-4">
               <div className="grid grid-cols-3 gap-4 text-center text-sm">
                 <div>
@@ -234,7 +244,7 @@ export function ReconciliationDashboard() {
         </>
       )}
 
-      {selectedCnpj && !selectedDate && (
+      {selectedMarca && !selectedDate && (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground text-sm">
             Selecione um dia para visualizar a conciliação.
@@ -242,7 +252,7 @@ export function ReconciliationDashboard() {
         </Card>
       )}
 
-      {!selectedCnpj && (
+      {!selectedMarca && (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground text-sm">
             <Calculator className="h-8 w-8 mx-auto mb-2 opacity-50" />

@@ -87,15 +87,18 @@ export function ReconciliationDashboard() {
     const valorItens = sum("valor_pdv");
     const incentivoLoja = sum("incentivo_loja");
     const taxasComissoes = sum("taxas_comissoes");
+    const taxaEntrega = sum("valor_taxa_entrega");
+    const desconto = sum("desconto");
     return {
       valorItens,
       incentivoLoja,
       taxasComissoes,
       incentivoIfood: sum("incentivo_ifood"),
       taxaServico: sum("taxa_servico"),
-      taxaEntrega: sum("valor_taxa_entrega"),
+      taxaEntrega,
+      desconto,
       liquidoPlataforma: sum("valor_liquido"),
-      totalLiquido: calcularTotalLiquidoPDV(valorItens, incentivoLoja, taxasComissoes),
+      totalLiquido: calcularTotalLiquidoPDV(valorItens, incentivoLoja, taxasComissoes, taxaEntrega, desconto),
       pedidos: dayItems.length,
     };
   }, [dayItems]);
@@ -162,7 +165,7 @@ export function ReconciliationDashboard() {
             </div>
 
             <CardContent className="py-4">
-              <div className="grid grid-cols-3 gap-4 text-center text-sm">
+              <div className="grid grid-cols-5 gap-4 text-center text-sm">
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Valor dos Itens</p>
                   <p className="font-bold text-lg">{fmt(totals.valorItens)}</p>
@@ -172,12 +175,20 @@ export function ReconciliationDashboard() {
                   <p className="font-bold text-lg text-destructive">{fmt(totals.incentivoLoja)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Taxas e Comissões</p>
+                  <p className="text-xs text-muted-foreground mb-1">Taxas/Com.</p>
                   <p className="font-bold text-lg text-destructive">{fmt(totals.taxasComissoes)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Tx Entrega</p>
+                  <p className="font-bold text-lg">{fmt(totals.taxaEntrega)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Desconto</p>
+                  <p className="font-bold text-lg text-destructive">-{fmt(totals.desconto)}</p>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground text-center mt-3 border-t pt-3">
-                Itens {fmt(totals.valorItens)} + Inc. Loja {fmt(totals.incentivoLoja)} + Comissões {fmt(totals.taxasComissoes)} = <strong className="text-primary">{fmt(totals.totalLiquido)}</strong>
+                Itens {fmt(totals.valorItens)} + Inc. Loja {fmt(totals.incentivoLoja)} + Com. {fmt(totals.taxasComissoes)} + Entrega {fmt(totals.taxaEntrega)} − Desc. {fmt(totals.desconto)} = <strong className="text-primary">{fmt(totals.totalLiquido)}</strong>
               </p>
             </CardContent>
           </Card>
@@ -216,6 +227,8 @@ export function ReconciliationDashboard() {
                       <TableHead className="text-xs text-right">Valor Itens</TableHead>
                       <TableHead className="text-xs text-right">Inc. Loja</TableHead>
                       <TableHead className="text-xs text-right">Taxas/Com.</TableHead>
+                      <TableHead className="text-xs text-right">Tx Entrega</TableHead>
+                      <TableHead className="text-xs text-right">Desconto</TableHead>
                       <TableHead className="text-xs text-right font-bold bg-primary/5">Líq. PDV</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -225,6 +238,8 @@ export function ReconciliationDashboard() {
                         Number(item.valor_pdv ?? 0),
                         Number(item.incentivo_loja ?? 0),
                         Number(item.taxas_comissoes ?? 0),
+                        Number(item.valor_taxa_entrega ?? 0),
+                        Number(item.desconto ?? 0),
                       );
                       return (
                         <TableRow key={item.id}>
@@ -232,6 +247,8 @@ export function ReconciliationDashboard() {
                           <TableCell className="text-xs text-right">{fmt(Number(item.valor_pdv ?? 0))}</TableCell>
                           <TableCell className="text-xs text-right text-destructive">{fmt(Number(item.incentivo_loja ?? 0))}</TableCell>
                           <TableCell className="text-xs text-right text-destructive">{fmt(Number(item.taxas_comissoes ?? 0))}</TableCell>
+                          <TableCell className="text-xs text-right">{fmt(Number(item.valor_taxa_entrega ?? 0))}</TableCell>
+                          <TableCell className="text-xs text-right text-destructive">-{fmt(Number(item.desconto ?? 0))}</TableCell>
                           <TableCell className="text-xs text-right font-bold text-primary bg-primary/5">{fmt(liq)}</TableCell>
                         </TableRow>
                       );

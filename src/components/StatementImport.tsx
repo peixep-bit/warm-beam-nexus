@@ -137,6 +137,7 @@ export function StatementImport() {
         taxas_comissoes: r.taxas_comissoes,
         valor_liquido_conciliado: r.valor_liquido_conciliado,
         marca: r.marca || effectiveMarca,
+        source_type: sourceType,
       }));
 
       // Insert in batches of 500

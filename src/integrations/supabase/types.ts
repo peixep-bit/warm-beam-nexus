@@ -164,6 +164,7 @@ export type Database = {
           marca: string | null
           numero_pedido: string | null
           quantidade_pedidos: number | null
+          source_type: string
           status: string | null
           taxa: number | null
           taxa_servico: number | null
@@ -191,6 +192,7 @@ export type Database = {
           marca?: string | null
           numero_pedido?: string | null
           quantidade_pedidos?: number | null
+          source_type?: string
           status?: string | null
           taxa?: number | null
           taxa_servico?: number | null
@@ -218,6 +220,7 @@ export type Database = {
           marca?: string | null
           numero_pedido?: string | null
           quantidade_pedidos?: number | null
+          source_type?: string
           status?: string | null
           taxa?: number | null
           taxa_servico?: number | null

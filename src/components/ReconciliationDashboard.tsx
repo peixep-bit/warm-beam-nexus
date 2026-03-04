@@ -144,13 +144,23 @@ export function ReconciliationDashboard() {
     });
   }, [pdvItems, extratoItems, hasBothSources]);
 
+  // Always show PDV items (or all items if no separation)
   const displayItems = useMemo(() => {
-    const items = hasBothSources ? [] : dayItems;
+    const items = pdvItems.length > 0 ? pdvItems : dayItems;
     if (!searchPedido) return items;
     return items.filter((i: any) =>
       i.numero_pedido?.toLowerCase().includes(searchPedido.toLowerCase()),
     );
-  }, [dayItems, searchPedido, hasBothSources]);
+  }, [dayItems, pdvItems, searchPedido]);
+
+  // Build extrato lookup map for iFood taxes column
+  const extratoMap = useMemo(() => {
+    const map = new Map<string, any>();
+    extratoItems.forEach((i: any) => {
+      if (i.numero_pedido) map.set(String(i.numero_pedido), i);
+    });
+    return map;
+  }, [extratoItems]);
 
   const displayCrossRef = useMemo(() => {
     if (!searchPedido) return crossRef;
@@ -369,49 +379,11 @@ export function ReconciliationDashboard() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center justify-between">
                 Pedidos do Dia
-                {searchPedido && <span className="text-xs font-normal text-muted-foreground">{(hasBothSources ? displayCrossRef : displayItems).length} resultado(s)</span>}
+                {searchPedido && <span className="text-xs font-normal text-muted-foreground">{displayItems.length} resultado(s)</span>}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              {hasBothSources ? (
-                /* Cross-reference table */
-                <div className="overflow-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs">Pedido</TableHead>
-                        <TableHead className="text-xs">Status</TableHead>
-                        <TableHead className="text-xs text-right">Itens (PDV)</TableHead>
-                        <TableHead className="text-xs text-right">Líq. PDV</TableHead>
-                        <TableHead className="text-xs text-right">Taxas iFood</TableHead>
-                        <TableHead className="text-xs text-right">Líq. iFood</TableHead>
-                        <TableHead className="text-xs text-right font-bold bg-primary/5">Diferença</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {displayCrossRef.map((r) => (
-                        <TableRow key={r.pedido} className={r.status === "divergente" ? "bg-destructive/5" : r.status === "cancelado" ? "opacity-50" : ""}>
-                          <TableCell className="text-xs font-mono">{r.pedido}</TableCell>
-                          <TableCell>{statusBadge(r.status)}</TableCell>
-                          <TableCell className="text-xs text-right">{r.pdv ? fmt(Number(r.pdv.valor_pdv ?? 0)) : "—"}</TableCell>
-                          <TableCell className="text-xs text-right font-medium">{r.pdvLiq != null ? fmt(r.pdvLiq) : "—"}</TableCell>
-                          <TableCell className="text-xs text-right text-destructive">{r.extTaxas != null ? fmt(r.extTaxas) : "—"}</TableCell>
-                          <TableCell className="text-xs text-right">{r.extLiq != null ? fmt(r.extLiq) : "—"}</TableCell>
-                          <TableCell className="text-xs text-right font-bold bg-primary/5">
-                            {r.diff != null ? (
-                              <span className={Math.abs(r.diff) > 0.05 ? "text-destructive" : "text-green-700"}>
-                                {fmt(r.diff)}
-                              </span>
-                            ) : "—"}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ) : (
-                /* Single source table (original) */
-                <div className="overflow-auto">
+               <div className="overflow-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -422,6 +394,7 @@ export function ReconciliationDashboard() {
                         <TableHead className="text-xs text-right">Tx Entrega</TableHead>
                         <TableHead className="text-xs text-right">Desconto</TableHead>
                         <TableHead className="text-xs text-right font-bold bg-primary/5">Líq. PDV</TableHead>
+                        {hasBothSources && <TableHead className="text-xs text-right text-destructive">Taxas iFood</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -433,6 +406,8 @@ export function ReconciliationDashboard() {
                           Number(item.valor_taxa_entrega ?? 0),
                           Number(item.desconto ?? 0),
                         );
+                        const ext = extratoMap.get(String(item.numero_pedido || ""));
+                        const extTaxas = ext ? Number(ext.taxas_comissoes ?? 0) : null;
                         return (
                           <TableRow key={item.id}>
                             <TableCell className="text-xs font-mono">{item.numero_pedido || "—"}</TableCell>
@@ -442,13 +417,17 @@ export function ReconciliationDashboard() {
                             <TableCell className="text-xs text-right">{fmt(Number(item.valor_taxa_entrega ?? 0))}</TableCell>
                             <TableCell className="text-xs text-right text-destructive">-{fmt(Number(item.desconto ?? 0))}</TableCell>
                             <TableCell className="text-xs text-right font-bold text-primary bg-primary/5">{fmt(liq)}</TableCell>
+                            {hasBothSources && (
+                              <TableCell className="text-xs text-right text-destructive font-medium">
+                                {extTaxas != null ? fmt(extTaxas) : "—"}
+                              </TableCell>
+                            )}
                           </TableRow>
                         );
                       })}
                     </TableBody>
                   </Table>
                 </div>
-              )}
             </CardContent>
           </Card>
         </>

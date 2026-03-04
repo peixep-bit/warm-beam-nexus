@@ -395,6 +395,7 @@ export function ReconciliationDashboard() {
                         <TableHead className="text-xs text-right">Desconto</TableHead>
                         <TableHead className="text-xs text-right font-bold bg-primary/5">Líq. PDV</TableHead>
                         {hasBothSources && <TableHead className="text-xs text-right text-destructive">Taxas iFood</TableHead>}
+                        {hasBothSources && <TableHead className="text-xs text-right font-bold bg-green-500/10">Líq. Conciliado</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -420,6 +421,11 @@ export function ReconciliationDashboard() {
                             {hasBothSources && (
                               <TableCell className="text-xs text-right text-destructive font-medium">
                                 {extTaxas != null ? fmt(extTaxas) : "—"}
+                              </TableCell>
+                            )}
+                            {hasBothSources && (
+                              <TableCell className="text-xs text-right font-bold bg-green-500/10">
+                                {extTaxas != null ? fmt(liq + extTaxas) : "—"}
                               </TableCell>
                             )}
                           </TableRow>

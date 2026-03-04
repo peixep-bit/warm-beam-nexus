@@ -213,7 +213,7 @@ export async function parseXLSX(file: File): Promise<ParsedRow[]> {
 
   const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
     defval: "",
-    raw: false,
+    raw: true,
   });
 
   if (jsonData.length === 0) return [];

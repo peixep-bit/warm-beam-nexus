@@ -394,8 +394,9 @@ export function ReconciliationDashboard() {
                         <TableHead className="text-xs text-right">Tx Entrega</TableHead>
                         <TableHead className="text-xs text-right">Desconto</TableHead>
                         <TableHead className="text-xs text-right font-bold bg-primary/5">Líq. PDV</TableHead>
-                        {hasBothSources && <TableHead className="text-xs text-right text-destructive">Taxas iFood</TableHead>}
-                        {hasBothSources && <TableHead className="text-xs text-right font-bold bg-green-500/10">Líq. Conciliado</TableHead>}
+                        <TableHead className="text-xs text-right text-destructive">Com. 12%</TableHead>
+                        <TableHead className="text-xs text-right text-destructive">Tx 2,7%</TableHead>
+                        <TableHead className="text-xs text-right font-bold bg-green-500/10">Conciliado</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -418,16 +419,9 @@ export function ReconciliationDashboard() {
                             <TableCell className="text-xs text-right">{fmt(Number(item.valor_taxa_entrega ?? 0))}</TableCell>
                             <TableCell className="text-xs text-right text-destructive">-{fmt(Number(item.desconto ?? 0))}</TableCell>
                             <TableCell className="text-xs text-right font-bold text-primary bg-primary/5">{fmt(liq)}</TableCell>
-                            {hasBothSources && (
-                              <TableCell className="text-xs text-right text-destructive font-medium">
-                                {extTaxas != null ? fmt(extTaxas) : "—"}
-                              </TableCell>
-                            )}
-                            {hasBothSources && (
-                              <TableCell className="text-xs text-right font-bold bg-green-500/10">
-                                {extTaxas != null ? fmt(liq + extTaxas) : "—"}
-                              </TableCell>
-                            )}
+                            <TableCell className="text-xs text-right text-destructive font-medium">{fmt(liq * -0.12)}</TableCell>
+                            <TableCell className="text-xs text-right text-destructive font-medium">{fmt(liq * -0.027)}</TableCell>
+                            <TableCell className="text-xs text-right font-bold bg-green-500/10 text-green-700">{fmt(liq * (1 - 0.12 - 0.027))}</TableCell>
                           </TableRow>
                         );
                       })}

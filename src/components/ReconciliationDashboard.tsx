@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { calcularTotalLiquidoPDV } from "@/lib/calculo-conciliacao";
-import { Calculator, Search, Receipt, CheckCircle2, XCircle, ArrowRightLeft } from "lucide-react";
+import { Calculator, Search, Receipt, CheckCircle2, XCircle, ArrowRightLeft, BookOpen } from "lucide-react";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtDate = (d: string) => {
@@ -257,7 +257,16 @@ export function ReconciliationDashboard() {
 
       {/* Main result */}
       {selectedDate && dayItems.length > 0 && (
-        <>
+        <Tabs defaultValue="conciliacao" className="space-y-4">
+          <TabsList className="h-9">
+            <TabsTrigger value="conciliacao" className="text-xs">Conciliação</TabsTrigger>
+            <TabsTrigger value="regras" className="text-xs">
+              <BookOpen className="h-3.5 w-3.5 mr-1" />
+              Regras
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="conciliacao" className="space-y-4">
           {/* Hero value */}
           <Card className="border-2 border-primary overflow-hidden">
             <div className="bg-primary/10 px-6 py-8 text-center">
@@ -430,7 +439,76 @@ export function ReconciliationDashboard() {
                 </div>
             </CardContent>
           </Card>
-        </>
+          </TabsContent>
+
+          <TabsContent value="regras">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-semibold">
+                  001 - IFOOD - DK Barra Funda
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">Regras de conciliação aplicadas a esta marca/plataforma</p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">#</TableHead>
+                        <TableHead className="text-xs">Regra</TableHead>
+                        <TableHead className="text-xs">Descrição</TableHead>
+                        <TableHead className="text-xs text-right">Fórmula</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell className="text-xs font-mono">1</TableCell>
+                        <TableCell className="text-xs font-medium">Líq. PDV</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">Valor líquido para lançamento interno</TableCell>
+                        <TableCell className="text-xs text-right font-mono bg-muted/50 whitespace-nowrap">
+                          Itens + Inc.Loja + Taxas/Com + Tx.Entrega − Desconto
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="text-xs font-mono">2</TableCell>
+                        <TableCell className="text-xs font-medium text-destructive">Comissão iFood</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">Comissão iFood menos entrega própria</TableCell>
+                        <TableCell className="text-xs text-right font-mono bg-muted/50 whitespace-nowrap">
+                          Líq. PDV × <strong>−12,0%</strong>
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="text-xs font-mono">3</TableCell>
+                        <TableCell className="text-xs font-medium text-destructive">Tx Pagamento Online</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">Taxa de transação de pagamento online</TableCell>
+                        <TableCell className="text-xs text-right font-mono bg-muted/50 whitespace-nowrap">
+                          Líq. PDV × <strong>−2,7%</strong>
+                        </TableCell>
+                      </TableRow>
+                      <TableRow className="bg-green-500/5">
+                        <TableCell className="text-xs font-mono">4</TableCell>
+                        <TableCell className="text-xs font-bold">Conciliado</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">Valor final de repasse esperado</TableCell>
+                        <TableCell className="text-xs text-right font-mono bg-green-500/10 whitespace-nowrap">
+                          Líq. PDV × <strong>85,3%</strong>
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+
+                <div className="rounded-lg border bg-muted/30 p-4">
+                  <p className="text-xs font-medium mb-2">📋 Resumo da fórmula</p>
+                  <code className="text-xs block bg-background rounded p-3 border">
+                    Conciliado = Líq. PDV − (Líq. PDV × 12%) − (Líq. PDV × 2,7%)<br/>
+                    Conciliado = Líq. PDV × (1 − 0,12 − 0,027)<br/>
+                    <strong>Conciliado = Líq. PDV × 0,853</strong>
+                  </code>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       )}
 
       {selectedMarca && !selectedDate && (

@@ -16,10 +16,12 @@ export type Database = {
     Tables: {
       fee_rules: {
         Row: {
+          base_field: string
           created_at: string
           description: string | null
           fixed_amount: number | null
           id: string
+          marca: string | null
           name: string
           percentage: number | null
           platform_id: string
@@ -27,10 +29,12 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          base_field?: string
           created_at?: string
           description?: string | null
           fixed_amount?: number | null
           id?: string
+          marca?: string | null
           name: string
           percentage?: number | null
           platform_id: string
@@ -38,10 +42,12 @@ export type Database = {
           user_id: string
         }
         Update: {
+          base_field?: string
           created_at?: string
           description?: string | null
           fixed_amount?: number | null
           id?: string
+          marca?: string | null
           name?: string
           percentage?: number | null
           platform_id?: string

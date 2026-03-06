@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { calcularTotalLiquidoPDV } from "@/lib/calculo-conciliacao";
+import { calcularTotalLiquidoPDV, aplicarRegras, type FeeRule } from "@/lib/calculo-conciliacao";
 import { Calculator, Search, Receipt, CheckCircle2, XCircle, ArrowRightLeft, BookOpen } from "lucide-react";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -42,6 +42,36 @@ export function ReconciliationDashboard() {
       return Array.from(set.entries()).map(([value, label]) => ({ value, label }));
     },
   });
+
+  // Fetch fee rules for the selected marca
+  const { data: feeRules = [] } = useQuery({
+    queryKey: ["fee_rules_for_marca", selectedMarca],
+    queryFn: async () => {
+      if (!selectedMarca) return [];
+      const { data, error } = await supabase
+        .from("fee_rules")
+        .select("*")
+        .or(`marca.eq.${selectedMarca},marca.is.null`)
+        .order("created_at");
+      if (error) throw error;
+      return (data || []) as any[];
+    },
+    enabled: !!selectedMarca,
+  });
+
+  // Convert to FeeRule interface
+  const activeRules: FeeRule[] = useMemo(() => {
+    // Prefer marca-specific rules; if none exist, use generic (marca=null)
+    const specific = feeRules.filter((r: any) => r.marca === selectedMarca);
+    const generic = feeRules.filter((r: any) => !r.marca);
+    const rules = specific.length > 0 ? specific : generic;
+    return rules.map((r: any) => ({
+      name: r.name,
+      percentage: r.percentage,
+      fixed_amount: r.fixed_amount,
+      base_field: r.base_field || "LiqPDV",
+    }));
+  }, [feeRules, selectedMarca]);
 
   // Fetch distinct dates for the selected marca
   const { data: dateOptions = [] } = useQuery({
@@ -90,17 +120,17 @@ export function ReconciliationDashboard() {
       if (i.numero_pedido) pdvMap.set(String(i.numero_pedido), i);
     });
 
-    const extratoMap = new Map<string, any>();
+    const extratoMapLocal = new Map<string, any>();
     extratoItems.forEach((i: any) => {
-      if (i.numero_pedido) extratoMap.set(String(i.numero_pedido), i);
+      if (i.numero_pedido) extratoMapLocal.set(String(i.numero_pedido), i);
     });
 
-    const allPedidos = new Set([...pdvMap.keys(), ...extratoMap.keys()]);
+    const allPedidos = new Set([...pdvMap.keys(), ...extratoMapLocal.keys()]);
     const results: any[] = [];
 
     allPedidos.forEach((pedido) => {
       const pdv = pdvMap.get(pedido);
-      const ext = extratoMap.get(pedido);
+      const ext = extratoMapLocal.get(pedido);
 
       const pdvLiq = pdv
         ? calcularTotalLiquidoPDV(
@@ -116,26 +146,14 @@ export function ReconciliationDashboard() {
       const extTaxas = ext ? Number(ext.taxas_comissoes ?? 0) : null;
       const extValorItens = ext ? Number(ext.valor_pdv ?? 0) : null;
 
-      // Difference between PDV calculated and extrato liquid
       const diff = pdvLiq != null && extLiq != null ? pdvLiq - extLiq : null;
-      // Status: matched if both exist, missing if only one side
       let status: "ok" | "divergente" | "so_pdv" | "so_extrato" | "cancelado" = "ok";
       if (!pdv) status = "so_extrato";
       else if (!ext) status = "so_pdv";
       else if (ext.descricao?.toUpperCase().includes("CANCELADO")) status = "cancelado";
       else if (Math.abs(diff ?? 0) > 0.05) status = "divergente";
 
-      results.push({
-        pedido,
-        pdv,
-        ext,
-        pdvLiq,
-        extValorItens,
-        extLiq,
-        extTaxas,
-        diff,
-        status,
-      });
+      results.push({ pedido, pdv, ext, pdvLiq, extValorItens, extLiq, extTaxas, diff, status });
     });
 
     return results.sort((a, b) => {
@@ -144,7 +162,6 @@ export function ReconciliationDashboard() {
     });
   }, [pdvItems, extratoItems, hasBothSources]);
 
-  // Always show PDV items (or all items if no separation)
   const displayItems = useMemo(() => {
     const items = pdvItems.length > 0 ? pdvItems : dayItems;
     if (!searchPedido) return items;
@@ -153,7 +170,6 @@ export function ReconciliationDashboard() {
     );
   }, [dayItems, pdvItems, searchPedido]);
 
-  // Build extrato lookup map for iFood taxes column
   const extratoMap = useMemo(() => {
     const map = new Map<string, any>();
     extratoItems.forEach((i: any) => {
@@ -170,7 +186,6 @@ export function ReconciliationDashboard() {
   }, [crossRef, searchPedido]);
 
   const totals = useMemo(() => {
-    // Use PDV items for PDV totals, or all if no separation
     const sourceItems = pdvItems.length > 0 ? pdvItems : dayItems;
     const sum = (key: string, items: any[] = sourceItems) => items.reduce((s: number, i: any) => s + Number(i[key] ?? 0), 0);
     const valorItens = sum("valor_pdv");
@@ -178,23 +193,21 @@ export function ReconciliationDashboard() {
     const taxasComissoes = sum("taxas_comissoes");
     const taxaEntrega = sum("valor_taxa_entrega");
     const desconto = sum("desconto");
+    const totalLiquido = calcularTotalLiquidoPDV(valorItens, incentivoLoja, taxasComissoes, taxaEntrega, desconto);
+    const { deductions, conciliado } = aplicarRegras(totalLiquido, activeRules);
     return {
-      valorItens,
-      incentivoLoja,
-      taxasComissoes,
+      valorItens, incentivoLoja, taxasComissoes,
       incentivoIfood: sum("incentivo_ifood"),
       taxaServico: sum("taxa_servico"),
-      taxaEntrega,
-      desconto,
+      taxaEntrega, desconto,
       liquidoPlataforma: sum("valor_liquido"),
-      totalLiquido: calcularTotalLiquidoPDV(valorItens, incentivoLoja, taxasComissoes, taxaEntrega, desconto),
-      pedidos: sourceItems.length,
-      // Extrato totals
+      totalLiquido, pedidos: sourceItems.length,
       extratoLiquido: sum("valor_liquido", extratoItems),
       extratoTaxas: sum("taxas_comissoes", extratoItems),
       extratoPedidos: extratoItems.length,
+      deductions, conciliado,
     };
-  }, [dayItems, pdvItems, extratoItems]);
+  }, [dayItems, pdvItems, extratoItems, activeRules]);
 
   const crossRefSummary = useMemo(() => {
     const ok = crossRef.filter((r) => r.status === "ok").length;
@@ -215,6 +228,8 @@ export function ReconciliationDashboard() {
       default: return null;
     }
   };
+
+  const hasRules = activeRules.length > 0;
 
   return (
     <div className="space-y-4">
@@ -262,7 +277,7 @@ export function ReconciliationDashboard() {
             <TabsTrigger value="conciliacao" className="text-xs">Conciliação</TabsTrigger>
             <TabsTrigger value="regras" className="text-xs">
               <BookOpen className="h-3.5 w-3.5 mr-1" />
-              Regras
+              Regras {hasRules ? `(${activeRules.length})` : ""}
             </TabsTrigger>
           </TabsList>
 
@@ -310,6 +325,25 @@ export function ReconciliationDashboard() {
                   <p className="font-bold text-lg text-destructive">-{fmt(totals.desconto)}</p>
                 </div>
               </div>
+
+              {/* Dynamic rules deductions */}
+              {hasRules && (
+                <div className="border-t mt-3 pt-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-sm">
+                    {totals.deductions.map((d, idx) => (
+                      <div key={idx}>
+                        <p className="text-xs text-muted-foreground mb-1">{d.name}</p>
+                        <p className="font-bold text-destructive">{fmt(d.value)}</p>
+                      </div>
+                    ))}
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1 font-semibold">Conciliado</p>
+                      <p className="font-bold text-lg text-green-700">{fmt(totals.conciliado)}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <p className="text-xs text-muted-foreground text-center mt-3 border-t pt-3">
                 Itens {fmt(totals.valorItens)} + Inc. Loja {fmt(totals.incentivoLoja)} + Com. {fmt(totals.taxasComissoes)} + Entrega {fmt(totals.taxaEntrega)} − Desc. {fmt(totals.desconto)} = <strong className="text-primary">{fmt(totals.totalLiquido)}</strong>
               </p>
@@ -403,9 +437,10 @@ export function ReconciliationDashboard() {
                         <TableHead className="text-xs text-right">Tx Entrega</TableHead>
                         <TableHead className="text-xs text-right">Desconto</TableHead>
                         <TableHead className="text-xs text-right font-bold bg-primary/5">Líq. PDV</TableHead>
-                        <TableHead className="text-xs text-right text-destructive">Com. 12%</TableHead>
-                        <TableHead className="text-xs text-right text-destructive">Tx 2,7%</TableHead>
-                        <TableHead className="text-xs text-right font-bold bg-green-500/10">Conciliado</TableHead>
+                        {activeRules.map((rule, idx) => (
+                          <TableHead key={idx} className="text-xs text-right text-destructive">{rule.name}</TableHead>
+                        ))}
+                        {hasRules && <TableHead className="text-xs text-right font-bold bg-green-500/10">Conciliado</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -417,8 +452,7 @@ export function ReconciliationDashboard() {
                           Number(item.valor_taxa_entrega ?? 0),
                           Number(item.desconto ?? 0),
                         );
-                        const ext = extratoMap.get(String(item.numero_pedido || ""));
-                        const extTaxas = ext ? Number(ext.taxas_comissoes ?? 0) : null;
+                        const { deductions, conciliado } = aplicarRegras(liq, activeRules);
                         return (
                           <TableRow key={item.id}>
                             <TableCell className="text-xs font-mono">{item.numero_pedido || "—"}</TableCell>
@@ -428,9 +462,10 @@ export function ReconciliationDashboard() {
                             <TableCell className="text-xs text-right">{fmt(Number(item.valor_taxa_entrega ?? 0))}</TableCell>
                             <TableCell className="text-xs text-right text-destructive">-{fmt(Number(item.desconto ?? 0))}</TableCell>
                             <TableCell className="text-xs text-right font-bold text-primary bg-primary/5">{fmt(liq)}</TableCell>
-                            <TableCell className="text-xs text-right text-destructive font-medium">{fmt(liq * -0.12)}</TableCell>
-                            <TableCell className="text-xs text-right text-destructive font-medium">{fmt(liq * -0.027)}</TableCell>
-                            <TableCell className="text-xs text-right font-bold bg-green-500/10 text-green-700">{fmt(liq * (1 - 0.12 - 0.027))}</TableCell>
+                            {deductions.map((d, idx) => (
+                              <TableCell key={idx} className="text-xs text-right text-destructive font-medium">{fmt(d.value)}</TableCell>
+                            ))}
+                            {hasRules && <TableCell className="text-xs text-right font-bold bg-green-500/10 text-green-700">{fmt(conciliado)}</TableCell>}
                           </TableRow>
                         );
                       })}
@@ -445,66 +480,75 @@ export function ReconciliationDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base font-semibold">
-                  001 - IFOOD - DK Barra Funda
+                  {selectedMarca}
                 </CardTitle>
-                <p className="text-xs text-muted-foreground">Regras de conciliação aplicadas a esta marca/plataforma</p>
+                <p className="text-xs text-muted-foreground">
+                  {hasRules
+                    ? `${activeRules.length} regra(s) de conciliação configurada(s) para esta marca`
+                    : "Nenhuma regra configurada. Cadastre regras na aba \"Taxas\" do menu."}
+                </p>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="overflow-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs">#</TableHead>
-                        <TableHead className="text-xs">Regra</TableHead>
-                        <TableHead className="text-xs">Descrição</TableHead>
-                        <TableHead className="text-xs text-right">Fórmula</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      <TableRow>
-                        <TableCell className="text-xs font-mono">1</TableCell>
-                        <TableCell className="text-xs font-medium">Líq. PDV</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">Valor líquido para lançamento interno</TableCell>
-                        <TableCell className="text-xs text-right font-mono bg-muted/50 whitespace-nowrap">
-                          Itens + Inc.Loja + Taxas/Com + Tx.Entrega − Desconto
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="text-xs font-mono">2</TableCell>
-                        <TableCell className="text-xs font-medium text-destructive">Comissão iFood</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">Comissão iFood menos entrega própria</TableCell>
-                        <TableCell className="text-xs text-right font-mono bg-muted/50 whitespace-nowrap">
-                          Líq. PDV × <strong>−12,0%</strong>
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="text-xs font-mono">3</TableCell>
-                        <TableCell className="text-xs font-medium text-destructive">Tx Pagamento Online</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">Taxa de transação de pagamento online</TableCell>
-                        <TableCell className="text-xs text-right font-mono bg-muted/50 whitespace-nowrap">
-                          Líq. PDV × <strong>−2,7%</strong>
-                        </TableCell>
-                      </TableRow>
-                      <TableRow className="bg-green-500/5">
-                        <TableCell className="text-xs font-mono">4</TableCell>
-                        <TableCell className="text-xs font-bold">Conciliado</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">Valor final de repasse esperado</TableCell>
-                        <TableCell className="text-xs text-right font-mono bg-green-500/10 whitespace-nowrap">
-                          Líq. PDV × <strong>85,3%</strong>
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </div>
+                {hasRules ? (
+                  <>
+                    <div className="overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">#</TableHead>
+                            <TableHead className="text-xs">Regra</TableHead>
+                            <TableHead className="text-xs">Base</TableHead>
+                            <TableHead className="text-xs text-right">Percentual</TableHead>
+                            <TableHead className="text-xs text-right">Valor Fixo</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {activeRules.map((rule, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell className="text-xs font-mono">{idx + 1}</TableCell>
+                              <TableCell className="text-xs font-medium">{rule.name}</TableCell>
+                              <TableCell className="text-xs font-mono">{rule.base_field}</TableCell>
+                              <TableCell className="text-xs text-right">
+                                {rule.percentage != null ? `${rule.percentage}%` : "—"}
+                              </TableCell>
+                              <TableCell className="text-xs text-right">
+                                {rule.fixed_amount != null ? fmt(rule.fixed_amount) : "—"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow className="bg-green-500/5">
+                            <TableCell className="text-xs font-mono">{activeRules.length + 1}</TableCell>
+                            <TableCell className="text-xs font-bold">Conciliado</TableCell>
+                            <TableCell className="text-xs font-mono">LiqPDV</TableCell>
+                            <TableCell className="text-xs text-right font-bold" colSpan={2}>
+                              Líq. PDV {activeRules.map(r => {
+                                if (r.percentage != null) return ` ${r.percentage > 0 ? '+' : ''}${r.percentage}%`;
+                                if (r.fixed_amount != null) return ` ${r.fixed_amount > 0 ? '+' : ''}${fmt(r.fixed_amount)}`;
+                                return '';
+                              }).join('')}
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
 
-                <div className="rounded-lg border bg-muted/30 p-4">
-                  <p className="text-xs font-medium mb-2">📋 Resumo da fórmula</p>
-                  <code className="text-xs block bg-background rounded p-3 border">
-                    Conciliado = Líq. PDV − (Líq. PDV × 12%) − (Líq. PDV × 2,7%)<br/>
-                    Conciliado = Líq. PDV × (1 − 0,12 − 0,027)<br/>
-                    <strong>Conciliado = Líq. PDV × 0,853</strong>
-                  </code>
-                </div>
+                    <div className="rounded-lg border bg-muted/30 p-4">
+                      <p className="text-xs font-medium mb-2">📋 Resumo da fórmula</p>
+                      <code className="text-xs block bg-background rounded p-3 border">
+                        Conciliado = Líq. PDV{activeRules.map(r => {
+                          if (r.percentage != null) return ` ${r.percentage > 0 ? '+' : '−'} (Líq. PDV × ${Math.abs(r.percentage)}%)`;
+                          if (r.fixed_amount != null) return ` ${r.fixed_amount > 0 ? '+' : '−'} ${fmt(Math.abs(r.fixed_amount))}`;
+                          return '';
+                        }).join('')}
+                      </code>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    <BookOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    Nenhuma regra cadastrada para esta marca. Vá em "Taxas" no menu lateral para criar regras.
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

@@ -45,6 +45,37 @@ export interface ItemConciliacao {
   [key: string]: unknown;
 }
 
+export interface FeeRule {
+  name: string;
+  percentage: number | null;
+  fixed_amount: number | null;
+  base_field: string;
+}
+
+/**
+ * Aplica uma lista de regras de taxa sobre o valor base (ex: LiqPDV).
+ * Retorna o array de valores deduzidos e o valor conciliado final.
+ */
+export function aplicarRegras(
+  liqPDV: number,
+  rules: FeeRule[],
+): { deductions: { name: string; value: number }[]; conciliado: number } {
+  const deductions: { name: string; value: number }[] = [];
+  let total = liqPDV;
+  for (const rule of rules) {
+    let value = 0;
+    if (rule.percentage != null) {
+      value = liqPDV * (rule.percentage / 100); // percentage comes as -12, -2.7 etc.
+    }
+    if (rule.fixed_amount != null) {
+      value += rule.fixed_amount;
+    }
+    deductions.push({ name: rule.name, value });
+    total += value; // values are negative, so adding them deducts
+  }
+  return { deductions, conciliado: total };
+}
+
 export function calcularTotalDiario(
   items: ItemConciliacao[],
   cnpj: string,

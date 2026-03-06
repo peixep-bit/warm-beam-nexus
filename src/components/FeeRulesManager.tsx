@@ -21,12 +21,18 @@ const TYPES = [
   { value: "outro", label: "Outro" },
 ];
 
+const BASE_FIELDS = [
+  { value: "LiqPDV", label: "Líq. PDV" },
+  { value: "ValorItens", label: "Valor dos Itens" },
+  { value: "ValorBruto", label: "Valor Bruto" },
+];
+
 export function FeeRulesManager() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", type: "taxa", platform_id: "", percentage: "", fixed_amount: "", description: "" });
+  const [form, setForm] = useState({ name: "", type: "taxa", platform_id: "", percentage: "", fixed_amount: "", description: "", base_field: "LiqPDV", marca: "" });
 
   const { data: platforms = [] } = useQuery({
     queryKey: ["platforms"],
@@ -34,6 +40,16 @@ export function FeeRulesManager() {
       const { data, error } = await supabase.from("platforms").select("*").order("name");
       if (error) throw error;
       return data;
+    },
+  });
+
+  const { data: marcas = [] } = useQuery({
+    queryKey: ["available-marcas"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("statement_items").select("marca");
+      if (error) throw error;
+      const unique = [...new Set((data || []).map((i: any) => i.marca).filter(Boolean))].sort();
+      return unique as string[];
     },
   });
 
@@ -56,13 +72,15 @@ export function FeeRulesManager() {
         percentage: form.percentage ? parseFloat(form.percentage) : null,
         fixed_amount: form.fixed_amount ? parseFloat(form.fixed_amount) : null,
         description: form.description || null,
+        base_field: form.base_field,
+        marca: form.marca || null,
       });
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["fee_rules"] });
       toast({ title: "Regra adicionada!" });
-      setForm({ name: "", type: "taxa", platform_id: "", percentage: "", fixed_amount: "", description: "" });
+      setForm({ name: "", type: "taxa", platform_id: "", percentage: "", fixed_amount: "", description: "", base_field: "LiqPDV", marca: "" });
       setOpen(false);
     },
     onError: (err: any) => toast({ title: "Erro", description: err.message, variant: "destructive" }),
@@ -97,26 +115,46 @@ export function FeeRulesManager() {
                 </Select>
               </div>
               <div>
+                <Label>Marca</Label>
+                <Select value={form.marca} onValueChange={v => setForm(f => ({ ...f, marca: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Todas as marcas" /></SelectTrigger>
+                  <SelectContent>
+                    {marcas.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label>Nome da regra</Label>
                 <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ex: Comissão padrão" />
               </div>
-              <div>
-                <Label>Tipo</Label>
-                <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Tipo</Label>
+                  <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Base de cálculo</Label>
+                  <Select value={form.base_field} onValueChange={v => setForm(f => ({ ...f, base_field: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {BASE_FIELDS.map(b => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Percentual (%)</Label>
-                  <Input type="number" step="0.01" value={form.percentage} onChange={e => setForm(f => ({ ...f, percentage: e.target.value }))} placeholder="Ex: 12.00" />
+                  <Input type="number" step="0.01" value={form.percentage} onChange={e => setForm(f => ({ ...f, percentage: e.target.value }))} placeholder="Ex: -12.00" />
                 </div>
                 <div>
                   <Label>Valor fixo (R$)</Label>
-                  <Input type="number" step="0.01" value={form.fixed_amount} onChange={e => setForm(f => ({ ...f, fixed_amount: e.target.value }))} placeholder="Ex: 3.99" />
+                  <Input type="number" step="0.01" value={form.fixed_amount} onChange={e => setForm(f => ({ ...f, fixed_amount: e.target.value }))} placeholder="Ex: -3.99" />
                 </div>
               </div>
               <div>
@@ -138,9 +176,11 @@ export function FeeRulesManager() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Marca</TableHead>
                   <TableHead>Plataforma</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Tipo</TableHead>
+                  <TableHead>Base</TableHead>
                   <TableHead>%</TableHead>
                   <TableHead>R$</TableHead>
                   <TableHead></TableHead>
@@ -149,9 +189,11 @@ export function FeeRulesManager() {
               <TableBody>
                 {rules.map((r: any) => (
                   <TableRow key={r.id}>
+                    <TableCell className="text-xs">{r.marca || "Todas"}</TableCell>
                     <TableCell className="font-medium">{r.platforms?.name}</TableCell>
                     <TableCell>{r.name}</TableCell>
                     <TableCell className="capitalize">{r.type}</TableCell>
+                    <TableCell className="text-xs font-mono">{r.base_field}</TableCell>
                     <TableCell>{r.percentage ? `${r.percentage}%` : "—"}</TableCell>
                     <TableCell>{r.fixed_amount ? `R$ ${Number(r.fixed_amount).toFixed(2)}` : "—"}</TableCell>
                     <TableCell>

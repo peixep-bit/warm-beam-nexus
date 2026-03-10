@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Navigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +16,7 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [forgotMode, setForgotMode] = useState(false);
 
   if (loading) return null;
   if (user) return <Navigate to="/" replace />;
@@ -35,6 +37,57 @@ export default function Auth() {
       setSubmitting(false);
     }
   };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      toast({ title: "Erro", description: "Digite seu e-mail.", variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      toast({ title: "E-mail enviado!", description: "Verifique sua caixa de entrada para redefinir a senha." });
+      setForgotMode(false);
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (forgotMode) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-md shadow-xl border-border/50">
+          <CardHeader className="text-center space-y-3">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <Utensils className="h-7 w-7" />
+            </div>
+            <CardTitle className="text-2xl font-bold tracking-tight">Recuperar senha</CardTitle>
+            <CardDescription>Digite seu e-mail para receber o link de recuperação.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="forgot-email">E-mail</Label>
+                <Input id="forgot-email" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="seu@email.com" />
+              </div>
+              <Button type="submit" className="w-full" disabled={submitting}>
+                {submitting ? "Enviando..." : "Enviar link de recuperação"}
+              </Button>
+              <Button type="button" variant="ghost" className="w-full" onClick={() => setForgotMode(false)}>
+                Voltar para login
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -64,6 +117,9 @@ export default function Auth() {
                 </div>
                 <Button type="submit" className="w-full" disabled={submitting}>
                   {submitting ? "Entrando..." : "Entrar"}
+                </Button>
+                <Button type="button" variant="link" className="w-full text-sm text-muted-foreground" onClick={() => setForgotMode(true)}>
+                  Esqueci minha senha
                 </Button>
               </form>
             </TabsContent>

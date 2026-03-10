@@ -59,6 +59,36 @@ export default function Auth() {
     }
   };
 
+  if (forgotMode) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-md shadow-xl border-border/50">
+          <CardHeader className="text-center space-y-3">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <Utensils className="h-7 w-7" />
+            </div>
+            <CardTitle className="text-2xl font-bold tracking-tight">Recuperar senha</CardTitle>
+            <CardDescription>Digite seu e-mail para receber o link de recuperação.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="forgot-email">E-mail</Label>
+                <Input id="forgot-email" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="seu@email.com" />
+              </div>
+              <Button type="submit" className="w-full" disabled={submitting}>
+                {submitting ? "Enviando..." : "Enviar link de recuperação"}
+              </Button>
+              <Button type="button" variant="ghost" className="w-full" onClick={() => setForgotMode(false)}>
+                Voltar para login
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md shadow-xl border-border/50">
@@ -87,6 +117,9 @@ export default function Auth() {
                 </div>
                 <Button type="submit" className="w-full" disabled={submitting}>
                   {submitting ? "Entrando..." : "Entrar"}
+                </Button>
+                <Button type="button" variant="link" className="w-full text-sm text-muted-foreground" onClick={() => setForgotMode(true)}>
+                  Esqueci minha senha
                 </Button>
               </form>
             </TabsContent>

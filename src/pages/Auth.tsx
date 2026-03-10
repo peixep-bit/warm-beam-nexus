@@ -38,6 +38,27 @@ export default function Auth() {
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      toast({ title: "Erro", description: "Digite seu e-mail.", variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      toast({ title: "E-mail enviado!", description: "Verifique sua caixa de entrada para redefinir a senha." });
+      setForgotMode(false);
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md shadow-xl border-border/50">

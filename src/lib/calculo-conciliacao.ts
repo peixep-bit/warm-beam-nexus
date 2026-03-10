@@ -65,13 +65,13 @@ export function aplicarRegras(
   for (const rule of rules) {
     let value = 0;
     if (rule.percentage != null) {
-      value = liqPDV * (rule.percentage / 100); // percentage comes as -12, -2.7 etc.
+      value = liqPDV * (-Math.abs(rule.percentage) / 100); // always deduct
     }
     if (rule.fixed_amount != null) {
-      value += rule.fixed_amount;
+      value += -Math.abs(rule.fixed_amount); // always deduct
     }
     deductions.push({ name: rule.name, value });
-    total += value; // values are negative, so adding them deducts
+    total += value; // value is negative, so this deducts
   }
   return { deductions, conciliado: total };
 }

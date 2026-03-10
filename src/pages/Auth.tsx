@@ -16,6 +16,7 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [forgotMode, setForgotMode] = useState(false);
 
   if (loading) return null;
   if (user) return <Navigate to="/" replace />;

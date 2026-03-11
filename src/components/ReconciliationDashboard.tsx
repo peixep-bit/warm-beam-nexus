@@ -210,7 +210,9 @@ export function ReconciliationDashboard() {
     const taxaEntrega = sum("valor_taxa_entrega");
     const desconto = sum("desconto");
     const totalLiquido = calcularTotalLiquidoPDV(valorItens, incentivoLoja, taxasComissoes, taxaEntrega, desconto);
-    const { deductions, conciliado } = aplicarRegras(totalLiquido, activeRules);
+    const valorBruto = sum("valor_bruto");
+    const baseValues: BaseValues = { LiqPDV: totalLiquido, ValorItens: valorItens, ValorBruto: valorBruto };
+    const { deductions, conciliado } = aplicarRegras(baseValues, activeRules);
     return {
       valorItens, incentivoLoja, taxasComissoes,
       incentivoIfood: sum("incentivo_ifood"),

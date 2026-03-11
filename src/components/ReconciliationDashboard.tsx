@@ -43,16 +43,6 @@ export function ReconciliationDashboard() {
     },
   });
 
-  // Get platform_ids linked to the current items
-  const platformIds = useMemo(() => {
-    const ids = new Set<string>();
-    dayItems.forEach((i: any) => {
-      // import_id links to statement_imports which has platform_id
-      // We'll fetch platform_id from imports
-    });
-    return ids;
-  }, [dayItems]);
-
   // Fetch platform_ids from imports for the selected marca
   const { data: importPlatforms = [] } = useQuery({
     queryKey: ["import-platforms", selectedMarca],

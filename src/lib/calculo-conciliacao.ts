@@ -53,19 +53,31 @@ export interface FeeRule {
 }
 
 /**
- * Aplica uma lista de regras de taxa sobre o valor base (ex: LiqPDV).
+ * Mapa de valores-base para cálculo de regras.
+ * Cada regra pode referenciar um campo diferente (LiqPDV, ValorItens, etc.)
+ */
+export interface BaseValues {
+  LiqPDV: number;
+  ValorItens: number;
+  ValorBruto: number;
+  [key: string]: number;
+}
+
+/**
+ * Aplica uma lista de regras de taxa, respeitando o base_field de cada uma.
  * Retorna o array de valores deduzidos e o valor conciliado final.
  */
 export function aplicarRegras(
-  liqPDV: number,
+  baseValues: BaseValues,
   rules: FeeRule[],
 ): { deductions: { name: string; value: number }[]; conciliado: number } {
   const deductions: { name: string; value: number }[] = [];
-  let total = liqPDV;
+  let total = baseValues.LiqPDV;
   for (const rule of rules) {
+    const base = baseValues[rule.base_field] ?? baseValues.LiqPDV;
     let value = 0;
     if (rule.percentage != null) {
-      value = liqPDV * (-Math.abs(rule.percentage) / 100); // always deduct
+      value = base * (-Math.abs(rule.percentage) / 100); // always deduct
     }
     if (rule.fixed_amount != null) {
       value += -Math.abs(rule.fixed_amount); // always deduct

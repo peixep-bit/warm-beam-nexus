@@ -43,20 +43,46 @@ export function ReconciliationDashboard() {
     },
   });
 
-  // Fetch fee rules for the selected marca
-  const { data: feeRules = [] } = useQuery({
-    queryKey: ["fee_rules_for_marca", selectedMarca],
+  // Get platform_ids linked to the current items
+  const platformIds = useMemo(() => {
+    const ids = new Set<string>();
+    dayItems.forEach((i: any) => {
+      // import_id links to statement_imports which has platform_id
+      // We'll fetch platform_id from imports
+    });
+    return ids;
+  }, [dayItems]);
+
+  // Fetch platform_ids from imports for the selected marca
+  const { data: importPlatforms = [] } = useQuery({
+    queryKey: ["import-platforms", selectedMarca],
     queryFn: async () => {
       if (!selectedMarca) return [];
       const { data, error } = await supabase
+        .from("statement_imports")
+        .select("platform_id")
+        .or(`marca.eq.${selectedMarca},cnpj.eq.${selectedMarca}`);
+      if (error) throw error;
+      return [...new Set((data || []).map((d: any) => d.platform_id))];
+    },
+    enabled: !!selectedMarca,
+  });
+
+  // Fetch fee rules filtered by marca AND platform
+  const { data: feeRules = [] } = useQuery({
+    queryKey: ["fee_rules_for_marca", selectedMarca, importPlatforms],
+    queryFn: async () => {
+      if (!selectedMarca || importPlatforms.length === 0) return [];
+      const { data, error } = await supabase
         .from("fee_rules")
-        .select("*")
+        .select("*, platforms(name)")
         .or(`marca.eq.${selectedMarca},marca.is.null`)
+        .in("platform_id", importPlatforms)
         .order("created_at");
       if (error) throw error;
       return (data || []) as any[];
     },
-    enabled: !!selectedMarca,
+    enabled: !!selectedMarca && importPlatforms.length > 0,
   });
 
   // Convert to FeeRule interface

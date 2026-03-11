@@ -463,14 +463,16 @@ export function ReconciliationDashboard() {
                     </TableHeader>
                     <TableBody>
                       {displayItems.map((item: any) => {
+                        const valorItensItem = Number(item.valor_pdv ?? 0);
                         const liq = calcularTotalLiquidoPDV(
-                          Number(item.valor_pdv ?? 0),
+                          valorItensItem,
                           Number(item.incentivo_loja ?? 0),
                           Number(item.taxas_comissoes ?? 0),
                           Number(item.valor_taxa_entrega ?? 0),
                           Number(item.desconto ?? 0),
                         );
-                        const { deductions, conciliado } = aplicarRegras(liq, activeRules);
+                        const itemBaseValues: BaseValues = { LiqPDV: liq, ValorItens: valorItensItem, ValorBruto: Number(item.valor_bruto ?? 0) };
+                        const { deductions, conciliado } = aplicarRegras(itemBaseValues, activeRules);
                         return (
                           <TableRow key={item.id}>
                             <TableCell className="text-xs font-mono">{item.numero_pedido || "—"}</TableCell>

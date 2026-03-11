@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { calcularTotalLiquidoPDV, aplicarRegras, type FeeRule } from "@/lib/calculo-conciliacao";
+import { calcularTotalLiquidoPDV, aplicarRegras, type FeeRule, type BaseValues } from "@/lib/calculo-conciliacao";
 import { Calculator, Search, Receipt, CheckCircle2, XCircle, ArrowRightLeft, BookOpen } from "lucide-react";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -43,20 +43,36 @@ export function ReconciliationDashboard() {
     },
   });
 
-  // Fetch fee rules for the selected marca
-  const { data: feeRules = [] } = useQuery({
-    queryKey: ["fee_rules_for_marca", selectedMarca],
+  // Fetch platform_ids from imports for the selected marca
+  const { data: importPlatforms = [] } = useQuery({
+    queryKey: ["import-platforms", selectedMarca],
     queryFn: async () => {
       if (!selectedMarca) return [];
       const { data, error } = await supabase
+        .from("statement_imports")
+        .select("platform_id")
+        .or(`marca.eq.${selectedMarca},cnpj.eq.${selectedMarca}`);
+      if (error) throw error;
+      return [...new Set((data || []).map((d: any) => d.platform_id))];
+    },
+    enabled: !!selectedMarca,
+  });
+
+  // Fetch fee rules filtered by marca AND platform
+  const { data: feeRules = [] } = useQuery({
+    queryKey: ["fee_rules_for_marca", selectedMarca, importPlatforms],
+    queryFn: async () => {
+      if (!selectedMarca || importPlatforms.length === 0) return [];
+      const { data, error } = await supabase
         .from("fee_rules")
-        .select("*")
+        .select("*, platforms(name)")
         .or(`marca.eq.${selectedMarca},marca.is.null`)
+        .in("platform_id", importPlatforms)
         .order("created_at");
       if (error) throw error;
       return (data || []) as any[];
     },
-    enabled: !!selectedMarca,
+    enabled: !!selectedMarca && importPlatforms.length > 0,
   });
 
   // Convert to FeeRule interface
@@ -194,7 +210,9 @@ export function ReconciliationDashboard() {
     const taxaEntrega = sum("valor_taxa_entrega");
     const desconto = sum("desconto");
     const totalLiquido = calcularTotalLiquidoPDV(valorItens, incentivoLoja, taxasComissoes, taxaEntrega, desconto);
-    const { deductions, conciliado } = aplicarRegras(totalLiquido, activeRules);
+    const valorBruto = sum("valor_bruto");
+    const baseValues: BaseValues = { LiqPDV: totalLiquido, ValorItens: valorItens, ValorBruto: valorBruto };
+    const { deductions, conciliado } = aplicarRegras(baseValues, activeRules);
     return {
       valorItens, incentivoLoja, taxasComissoes,
       incentivoIfood: sum("incentivo_ifood"),
@@ -445,14 +463,16 @@ export function ReconciliationDashboard() {
                     </TableHeader>
                     <TableBody>
                       {displayItems.map((item: any) => {
+                        const valorItensItem = Number(item.valor_pdv ?? 0);
                         const liq = calcularTotalLiquidoPDV(
-                          Number(item.valor_pdv ?? 0),
+                          valorItensItem,
                           Number(item.incentivo_loja ?? 0),
                           Number(item.taxas_comissoes ?? 0),
                           Number(item.valor_taxa_entrega ?? 0),
                           Number(item.desconto ?? 0),
                         );
-                        const { deductions, conciliado } = aplicarRegras(liq, activeRules);
+                        const itemBaseValues: BaseValues = { LiqPDV: liq, ValorItens: valorItensItem, ValorBruto: Number(item.valor_bruto ?? 0) };
+                        const { deductions, conciliado } = aplicarRegras(itemBaseValues, activeRules);
                         return (
                           <TableRow key={item.id}>
                             <TableCell className="text-xs font-mono">{item.numero_pedido || "—"}</TableCell>

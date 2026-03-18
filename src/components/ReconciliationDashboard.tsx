@@ -22,10 +22,9 @@ const isCancelado = (item: any) => {
 };
 
 export function ReconciliationDashboard() {
-  const [selectedMarca, setSelectedMarca] = useState("");
+  const [selectedMarcaKey, setSelectedMarcaKey] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [searchPedido, setSearchPedido] = useState("");
-  const [selectedPlatformFilter, setSelectedPlatformFilter] = useState("__all__");
   // Fetch platforms for filter
   const { data: allPlatforms = [] } = useQuery({
     queryKey: ["platforms"],

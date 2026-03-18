@@ -204,36 +204,30 @@ export function parseCSV(text: string): ParsedRow[] {
 }
 
 export async function parseXLSX(file: File): Promise<ParsedRow[]> {
-  try {
-    // Try read-excel-file first (safer, no CVE issues)
-    const readXlsxFile = (await import("read-excel-file/web")).default;
-    const rows = await readXlsxFile(file);
-    if (rows.length < 2) return [];
-    const headers = rows[0].map(h => normalizeHeader(String(h ?? "")));
-    return rows.slice(1).map(values => {
-      const record: Record<string, string | number> = {};
-      headers.forEach((h, idx) => {
-        const val = values[idx];
-        record[h] = typeof val === "number" ? val : String(val ?? "");
-      });
-      return rowFromRecord(record);
-    });
-  } catch {
-    // Fallback to xlsx for files with inline strings
-    const XLSX = await import("xlsx");
-    const buffer = await file.arrayBuffer();
-    const wb = XLSX.read(buffer, { type: "array" });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const json = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: "" });
-    if (json.length === 0) return [];
-    return json.map(row => {
-      const record: Record<string, string | number> = {};
-      for (const [k, v] of Object.entries(row)) {
-        record[normalizeHeader(k)] = typeof v === "number" ? v : String(v ?? "");
-      }
-      return rowFromRecord(record);
-    });
-  }
+  const XLSX = await import("xlsx");
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, {
+    type: "array",
+    cellDates: false,
+    raw: true,
+  });
+  const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+  if (!worksheet) return [];
+
+  const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
+    defval: "",
+    raw: true,
+  });
+
+  if (json.length === 0) return [];
+
+  return json.map((row) => {
+    const record: Record<string, string | number> = {};
+    for (const [key, value] of Object.entries(row)) {
+      record[normalizeHeader(key)] = typeof value === "number" ? value : String(value ?? "");
+    }
+    return rowFromRecord(record);
+  });
 }
 
 export async function parseFile(file: File): Promise<ParsedRow[]> {

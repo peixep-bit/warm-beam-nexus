@@ -392,7 +392,6 @@ export function ReconciliationDashboard() {
                   </div>
                 </div>
               )}
-              )}
 
               <p className="text-xs text-muted-foreground text-center mt-3 border-t pt-3">
                 Itens {fmt(totals.valorItens)} + Inc. Loja {fmt(totals.incentivoLoja)} + Com. {fmt(totals.taxasComissoes)} + Entrega {fmt(totals.taxaEntrega)} − Desc. {fmt(totals.desconto)} = <strong className="text-primary">{fmt(totals.totalLiquido)}</strong>

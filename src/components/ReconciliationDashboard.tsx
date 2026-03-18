@@ -16,6 +16,10 @@ const fmtDate = (d: string) => {
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
 };
+const isCancelado = (item: any) => {
+  const desc = String(item.descricao ?? "").toUpperCase();
+  return desc.includes("CANCELADO") || desc.includes("PARCIAL");
+};
 
 export function ReconciliationDashboard() {
   const [selectedMarca, setSelectedMarca] = useState("");
@@ -212,7 +216,9 @@ export function ReconciliationDashboard() {
 
   const totals = useMemo(() => {
     const sourceItems = pdvItems.length > 0 ? pdvItems : dayItems;
-    const sum = (key: string, items: any[] = sourceItems) => items.reduce((s: number, i: any) => s + Number(i[key] ?? 0), 0);
+    const activeItems = sourceItems.filter((i: any) => !isCancelado(i));
+    const cancelados = sourceItems.filter((i: any) => isCancelado(i));
+    const sum = (key: string, items: any[] = activeItems) => items.reduce((s: number, i: any) => s + Number(i[key] ?? 0), 0);
     const valorItens = sum("valor_pdv");
     const incentivoLoja = sum("incentivo_loja");
     const taxasComissoes = sum("taxas_comissoes");
@@ -222,13 +228,22 @@ export function ReconciliationDashboard() {
     const valorBruto = sum("valor_bruto");
     const baseValues: BaseValues = { LiqPDV: totalLiquido, ValorItens: valorItens, ValorBruto: valorBruto };
     const { deductions, conciliado } = aplicarRegras(baseValues, activeRules);
+
+    // Cancelled totals
+    const canceladoLiq = cancelados.reduce((s: number, i: any) => s + calcularTotalLiquidoPDV(
+      Number(i.valor_pdv ?? 0), Number(i.incentivo_loja ?? 0), Number(i.taxas_comissoes ?? 0),
+      Number(i.valor_taxa_entrega ?? 0), Number(i.desconto ?? 0)
+    ), 0);
+
     return {
       valorItens, incentivoLoja, taxasComissoes,
       incentivoIfood: sum("incentivo_ifood"),
       taxaServico: sum("taxa_servico"),
       taxaEntrega, desconto,
       liquidoPlataforma: sum("valor_liquido"),
-      totalLiquido, pedidos: sourceItems.length,
+      totalLiquido, pedidos: activeItems.length,
+      cancelados: cancelados.length, canceladoLiq,
+      totalPedidos: sourceItems.length,
       extratoLiquido: sum("valor_liquido", extratoItems),
       extratoTaxas: sum("taxas_comissoes", extratoItems),
       extratoPedidos: extratoItems.length,
@@ -321,8 +336,14 @@ export function ReconciliationDashboard() {
               <p className="text-5xl font-black text-primary tabular-nums">
                 {fmt(totals.totalLiquido)}
               </p>
-              <div className="flex items-center justify-center gap-3 mt-3 text-xs text-muted-foreground">
-                <Badge variant="secondary">{totals.pedidos} pedido(s) PDV</Badge>
+              <div className="flex items-center justify-center gap-3 mt-3 text-xs text-muted-foreground flex-wrap">
+                <Badge variant="secondary">{totals.pedidos} pedido(s) ativos</Badge>
+                {totals.cancelados > 0 && (
+                  <Badge variant="destructive" className="text-[10px]">
+                    <XCircle className="h-3 w-3 mr-0.5" />
+                    {totals.cancelados} cancelado(s) — {fmt(totals.canceladoLiq)} excluído(s)
+                  </Badge>
+                )}
                 {hasBothSources && <Badge variant="outline">{totals.extratoPedidos} no extrato</Badge>}
                 <span>{fmtDate(selectedDate)}</span>
                 <span>{selectedMarca}</span>
@@ -496,6 +517,7 @@ export function ReconciliationDashboard() {
                     </TableHeader>
                     <TableBody>
                       {displayItems.map((item: any) => {
+                        const cancelled = isCancelado(item);
                         const valorItensItem = Number(item.valor_pdv ?? 0);
                         const liq = calcularTotalLiquidoPDV(
                           valorItensItem,
@@ -510,9 +532,15 @@ export function ReconciliationDashboard() {
                         const ext = extratoMap.get(String(item.numero_pedido));
                         const extTaxas = ext ? Number(ext.taxas_comissoes ?? 0) : null;
                         const extConciliado = extTaxas != null ? liq + extTaxas : null;
+                        const rowClass = cancelled ? "opacity-50 line-through bg-destructive/5" : "";
                         return (
-                          <TableRow key={item.id}>
-                            <TableCell className="text-xs font-mono">{item.numero_pedido || "—"}</TableCell>
+                          <TableRow key={item.id} className={rowClass}>
+                            <TableCell className="text-xs font-mono">
+                              <span className="flex items-center gap-1">
+                                {item.numero_pedido || "—"}
+                                {cancelled && <Badge variant="destructive" className="text-[8px] px-1 py-0 no-underline">Cancelado</Badge>}
+                              </span>
+                            </TableCell>
                             <TableCell className="text-xs text-right">{fmt(Number(item.valor_pdv ?? 0))}</TableCell>
                             <TableCell className="text-xs text-right text-destructive">{fmt(Number(item.incentivo_loja ?? 0))}</TableCell>
                             <TableCell className="text-xs text-right text-destructive">{fmt(Number(item.taxas_comissoes ?? 0))}</TableCell>

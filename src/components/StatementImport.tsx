@@ -85,7 +85,7 @@ export function StatementImport() {
       if (!platformId || parsedData.length === 0) throw new Error("Selecione plataforma e arquivo");
 
       // Filter by selected marca if applicable
-      const dataToImport = marca
+      const dataToImport = (marca && marca !== "__all__")
         ? parsedData.filter((r: any) => r.marca === marca)
         : parsedData;
 

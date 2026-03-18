@@ -80,14 +80,21 @@ export function StatementImport() {
     }
   };
 
+  // Helper: match parceiro string to a platform id (fuzzy)
+  const matchPlatform = (parceiro: string): string | null => {
+    if (!parceiro) return null;
+    const norm = parceiro.toLowerCase().replace(/[^a-z0-9]/g, "");
+    for (const p of platforms) {
+      const pNorm = p.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (norm === pNorm || norm.includes(pNorm) || pNorm.includes(norm)) return p.id;
+    }
+    return null;
+  };
+
   const importMutation = useMutation({
     mutationFn: async () => {
-      if ((!platformId || platformId === "__all__") && platforms.length === 0) throw new Error("Cadastre ao menos uma plataforma");
-      if (!platformId || parsedData.length === 0) throw new Error("Selecione plataforma e arquivo");
-
-      // If "Todas" is selected, use the first platform as default (required FK)
-      const effectivePlatformId = platformId === "__all__" ? platforms[0]?.id : platformId;
-      if (!effectivePlatformId) throw new Error("Nenhuma plataforma disponível");
+      if (platforms.length === 0) throw new Error("Cadastre ao menos uma plataforma");
+      if (parsedData.length === 0) throw new Error("Selecione um arquivo");
 
       // Filter by selected marca if applicable
       const dataToImport = (marca && marca !== "__all__")
@@ -96,60 +103,93 @@ export function StatementImport() {
 
       if (dataToImport.length === 0) throw new Error("Nenhuma linha para a marca selecionada");
 
-      const effectiveMarca = marca || detectedMarcas[0] || "";
+      // Group rows by parceiro (platform detected from file)
+      const hasMultipleParceiros = detectedParceiro.length > 1;
+      const groups = new Map<string, any[]>();
 
-      const sum = (key: string) => dataToImport.reduce((s: number, r: any) => s + (r[key] ?? 0), 0);
-      const dates = dataToImport.map((r: any) => r.data_transacao).filter(Boolean).sort();
+      if (hasMultipleParceiros) {
+        // Group by parceiro field from file
+        for (const row of dataToImport) {
+          const parceiro = row.parceiro || "__default__";
+          if (!groups.has(parceiro)) groups.set(parceiro, []);
+          groups.get(parceiro)!.push(row);
+        }
+      } else {
+        // Single group with the user-selected platform
+        groups.set("__default__", dataToImport);
+      }
 
-      const { data: imp, error: impErr } = await supabase.from("statement_imports").insert({
-        user_id: user!.id,
-        platform_id: effectivePlatformId,
-        file_name: fileName,
-        cnpj: cnpj || null,
-        loja: loja || null,
-        total_bruto: sum("valor_bruto"),
-        total_taxas: sum("taxa"),
-        total_descontos: sum("desconto"),
-        total_repasse: sum("valor_liquido"),
-        period_start: dates[0] || null,
-        period_end: dates[dates.length - 1] || null,
-        status: "processado",
-        source_type: sourceType,
-        marca: effectiveMarca,
-      }).select().single();
-      if (impErr) throw impErr;
+      for (const [parceiro, rows] of groups) {
+        // Resolve platform_id: match parceiro to platform, or use user selection
+        let effectivePlatformId: string;
+        if (parceiro !== "__default__") {
+          const matched = matchPlatform(parceiro);
+          if (matched) {
+            effectivePlatformId = matched;
+          } else {
+            // Fallback to user-selected platform
+            effectivePlatformId = (platformId && platformId !== "__all__") ? platformId : platforms[0]?.id;
+          }
+        } else {
+          effectivePlatformId = (platformId && platformId !== "__all__") ? platformId : platforms[0]?.id;
+        }
+        if (!effectivePlatformId) throw new Error("Nenhuma plataforma disponível");
 
-      const items = dataToImport.map((r: any) => ({
-        import_id: imp.id,
-        user_id: user!.id,
-        data_transacao: r.data_transacao,
-        loja: r.loja || loja || null,
-        cnpj: r.cnpj || cnpj || null,
-        descricao: r.descricao,
-        quantidade_pedidos: r.quantidade_pedidos,
-        valor_pdv: r.valor_pdv,
-        valor_bruto: r.valor_bruto,
-        desconto: r.desconto,
-        taxa: r.taxa,
-        valor_taxa_entrega: r.valor_taxa_entrega,
-        valor_liquido: r.valor_liquido,
-        numero_pedido: r.numero_pedido,
-        forma_pagamento: r.forma_pagamento,
-        incentivo_ifood: r.incentivo_ifood,
-        incentivo_loja: r.incentivo_loja,
-        incentivo_rede: r.incentivo_rede,
-        taxa_servico: r.taxa_servico,
-        taxas_comissoes: r.taxas_comissoes,
-        valor_liquido_conciliado: r.valor_liquido_conciliado,
-        marca: r.marca || effectiveMarca,
-        source_type: sourceType,
-      }));
+        const effectiveMarca = marca || detectedMarcas[0] || "";
 
-      // Insert in batches of 500
-      for (let i = 0; i < items.length; i += 500) {
-        const batch = items.slice(i, i + 500);
-        const { error: itemsErr } = await supabase.from("statement_items").insert(batch);
-        if (itemsErr) throw itemsErr;
+        const sum = (key: string) => rows.reduce((s: number, r: any) => s + (r[key] ?? 0), 0);
+        const dates = rows.map((r: any) => r.data_transacao).filter(Boolean).sort();
+
+        const { data: imp, error: impErr } = await supabase.from("statement_imports").insert({
+          user_id: user!.id,
+          platform_id: effectivePlatformId,
+          file_name: fileName + (parceiro !== "__default__" ? ` [${parceiro}]` : ""),
+          cnpj: cnpj || null,
+          loja: loja || null,
+          total_bruto: sum("valor_bruto"),
+          total_taxas: sum("taxa"),
+          total_descontos: sum("desconto"),
+          total_repasse: sum("valor_liquido"),
+          period_start: dates[0] || null,
+          period_end: dates[dates.length - 1] || null,
+          status: "processado",
+          source_type: sourceType,
+          marca: effectiveMarca,
+        }).select().single();
+        if (impErr) throw impErr;
+
+        const items = rows.map((r: any) => ({
+          import_id: imp.id,
+          user_id: user!.id,
+          data_transacao: r.data_transacao,
+          loja: r.loja || loja || null,
+          cnpj: r.cnpj || cnpj || null,
+          descricao: r.descricao,
+          quantidade_pedidos: r.quantidade_pedidos,
+          valor_pdv: r.valor_pdv,
+          valor_bruto: r.valor_bruto,
+          desconto: r.desconto,
+          taxa: r.taxa,
+          valor_taxa_entrega: r.valor_taxa_entrega,
+          valor_liquido: r.valor_liquido,
+          numero_pedido: r.numero_pedido,
+          forma_pagamento: r.forma_pagamento,
+          incentivo_ifood: r.incentivo_ifood,
+          incentivo_loja: r.incentivo_loja,
+          incentivo_rede: r.incentivo_rede,
+          taxa_servico: r.taxa_servico,
+          taxas_comissoes: r.taxas_comissoes,
+          valor_liquido_conciliado: r.valor_liquido_conciliado,
+          marca: r.marca || effectiveMarca,
+          source_type: sourceType,
+        }));
+
+        // Insert in batches of 500
+        for (let i = 0; i < items.length; i += 500) {
+          const batch = items.slice(i, i + 500);
+          const { error: itemsErr } = await supabase.from("statement_items").insert(batch);
+          if (itemsErr) throw itemsErr;
+        }
       }
     },
     onSuccess: () => {

@@ -54,7 +54,7 @@ export default defineConfig(({ mode }) => ({
     }),
   ].filter(Boolean),
   optimizeDeps: {
-    include: ["read-excel-file"],
+    exclude: ["read-excel-file"],
   },
   resolve: {
     alias: {

@@ -43,17 +43,26 @@ export function ReconciliationDashboard() {
     },
   });
 
-  // Fetch platform_ids from imports for the selected marca
+  // Fetch platform_ids from statement_items via their imports
   const { data: importPlatforms = [] } = useQuery({
     queryKey: ["import-platforms", selectedMarca],
     queryFn: async () => {
       if (!selectedMarca) return [];
-      const { data, error } = await supabase
+      // Get import_ids from statement_items for this marca
+      const { data: items, error: itemsErr } = await supabase
+        .from("statement_items")
+        .select("import_id")
+        .or(`marca.eq.${selectedMarca},cnpj.eq.${selectedMarca},loja.eq.${selectedMarca}`);
+      if (itemsErr) throw itemsErr;
+      const importIds = [...new Set((items || []).map((i: any) => i.import_id))];
+      if (importIds.length === 0) return [];
+      // Get platform_ids from those imports
+      const { data: imports, error: impErr } = await supabase
         .from("statement_imports")
         .select("platform_id")
-        .or(`marca.eq.${selectedMarca},cnpj.eq.${selectedMarca},loja.eq.${selectedMarca}`);
-      if (error) throw error;
-      return [...new Set((data || []).map((d: any) => d.platform_id))];
+        .in("id", importIds);
+      if (impErr) throw impErr;
+      return [...new Set((imports || []).map((d: any) => d.platform_id))];
     },
     enabled: !!selectedMarca,
   });

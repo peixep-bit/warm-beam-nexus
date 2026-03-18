@@ -25,7 +25,7 @@ export function ReconciliationDashboard() {
   const [selectedMarca, setSelectedMarca] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [searchPedido, setSearchPedido] = useState("");
-
+  const [selectedPlatformFilter, setSelectedPlatformFilter] = useState("__all__");
   // Fetch distinct marcas from DB
   const { data: marcaOptions = [] } = useQuery({
     queryKey: ["reconciliation-marcas"],

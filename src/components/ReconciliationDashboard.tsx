@@ -25,25 +25,59 @@ export function ReconciliationDashboard() {
   const [selectedMarca, setSelectedMarca] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [searchPedido, setSearchPedido] = useState("");
+  const [selectedPlatformFilter, setSelectedPlatformFilter] = useState("__all__");
+  // Fetch platforms for filter
+  const { data: allPlatforms = [] } = useQuery({
+    queryKey: ["platforms"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("platforms").select("*").order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
 
-  // Fetch distinct marcas from DB
+  // Fetch distinct marcas from DB with platform info
   const { data: marcaOptions = [] } = useQuery({
     queryKey: ["reconciliation-marcas"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Get items with their import to know the platform
+      const { data: items, error } = await supabase
         .from("statement_items")
-        .select("marca, loja, cnpj");
+        .select("marca, loja, cnpj, import_id");
       if (error) throw error;
-      const set = new Map<string, string>();
-      (data || []).forEach((i: any) => {
+
+      // Get all imports to map platform_id
+      const importIds = [...new Set((items || []).map((i: any) => i.import_id))];
+      const { data: imports } = importIds.length > 0
+        ? await supabase.from("statement_imports").select("id, platform_id").in("id", importIds)
+        : { data: [] };
+      const importMap = new Map((imports || []).map((imp: any) => [imp.id, imp.platform_id]));
+
+      // Get platforms for names
+      const { data: platforms } = await supabase.from("platforms").select("id, name");
+      const platformNameMap = new Map((platforms || []).map((p: any) => [p.id, p.name]));
+
+      const set = new Map<string, { label: string; platformIds: Set<string> }>();
+      (items || []).forEach((i: any) => {
         const key = i.marca || i.cnpj || "";
         if (!key) return;
-        const label = i.marca
-          ? i.marca + (i.loja ? ` — ${i.loja}` : "") + (i.cnpj ? ` (${i.cnpj})` : "")
-          : i.cnpj || "";
-        if (!set.has(key)) set.set(key, label);
+        const platformId = importMap.get(i.import_id) || "";
+        const platformName = platformNameMap.get(platformId) || "";
+        
+        if (!set.has(key)) {
+          const label = i.marca
+            ? i.marca + (platformName ? ` — ${platformName}` : "") + (i.loja ? ` — ${i.loja}` : "")
+            : i.cnpj || "";
+          set.set(key, { label, platformIds: new Set([platformId]) });
+        } else {
+          set.get(key)!.platformIds.add(platformId);
+        }
       });
-      return Array.from(set.entries()).map(([value, label]) => ({ value, label }));
+      return Array.from(set.entries()).map(([value, info]) => ({
+        value,
+        label: info.label,
+        platformIds: Array.from(info.platformIds),
+      }));
     },
   });
 
@@ -119,13 +153,13 @@ export function ReconciliationDashboard() {
   });
 
   // Fetch items for the selected marca + date
-  const { data: dayItems = [] } = useQuery({
+  const { data: rawDayItems = [] } = useQuery({
     queryKey: ["reconciliation-day", selectedMarca, selectedDate],
     queryFn: async () => {
       if (!selectedMarca || !selectedDate) return [];
       const { data, error } = await supabase
         .from("statement_items")
-        .select("*")
+        .select("*, statement_imports!inner(platform_id)")
         .or(`marca.eq.${selectedMarca},cnpj.eq.${selectedMarca}`)
         .eq("data_transacao", selectedDate)
         .order("numero_pedido");
@@ -134,6 +168,12 @@ export function ReconciliationDashboard() {
     },
     enabled: !!selectedMarca && !!selectedDate,
   });
+
+  // Filter by platform if selected
+  const dayItems = useMemo(() => {
+    if (selectedPlatformFilter === "__all__") return rawDayItems;
+    return rawDayItems.filter((i: any) => i.statement_imports?.platform_id === selectedPlatformFilter);
+  }, [rawDayItems, selectedPlatformFilter]);
 
   // Separate PDV and Extrato items
   const pdvItems = useMemo(() => dayItems.filter((i: any) => i.source_type === "pdv"), [dayItems]);
@@ -278,14 +318,26 @@ export function ReconciliationDashboard() {
       {/* Selectors */}
       <Card>
         <CardContent className="pt-6">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
               <Label className="text-xs font-medium text-muted-foreground">Marca</Label>
-              <Select value={selectedMarca} onValueChange={(v) => { setSelectedMarca(v); setSelectedDate(""); }}>
+              <Select value={selectedMarca} onValueChange={(v) => { setSelectedMarca(v); setSelectedDate(""); setSelectedPlatformFilter("__all__"); }}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {marcaOptions.map((o) => (
                     <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground">Plataforma</Label>
+              <Select value={selectedPlatformFilter} onValueChange={setSelectedPlatformFilter} disabled={!selectedMarca}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Todas" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todas</SelectItem>
+                  {allPlatforms.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

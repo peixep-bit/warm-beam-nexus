@@ -82,7 +82,12 @@ export function StatementImport() {
 
   const importMutation = useMutation({
     mutationFn: async () => {
+      if ((!platformId || platformId === "__all__") && platforms.length === 0) throw new Error("Cadastre ao menos uma plataforma");
       if (!platformId || parsedData.length === 0) throw new Error("Selecione plataforma e arquivo");
+
+      // If "Todas" is selected, use the first platform as default (required FK)
+      const effectivePlatformId = platformId === "__all__" ? platforms[0]?.id : platformId;
+      if (!effectivePlatformId) throw new Error("Nenhuma plataforma disponível");
 
       // Filter by selected marca if applicable
       const dataToImport = (marca && marca !== "__all__")
@@ -98,7 +103,7 @@ export function StatementImport() {
 
       const { data: imp, error: impErr } = await supabase.from("statement_imports").insert({
         user_id: user!.id,
-        platform_id: platformId,
+        platform_id: effectivePlatformId,
         file_name: fileName,
         cnpj: cnpj || null,
         loja: loja || null,
@@ -185,6 +190,7 @@ export function StatementImport() {
             <Select value={platformId} onValueChange={setPlatformId}>
               <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="__all__">📋 Todas</SelectItem>
                 {platforms.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
               </SelectContent>
             </Select>

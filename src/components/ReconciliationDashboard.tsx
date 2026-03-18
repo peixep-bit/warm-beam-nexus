@@ -517,6 +517,7 @@ export function ReconciliationDashboard() {
                     </TableHeader>
                     <TableBody>
                       {displayItems.map((item: any) => {
+                        const cancelled = isCancelado(item);
                         const valorItensItem = Number(item.valor_pdv ?? 0);
                         const liq = calcularTotalLiquidoPDV(
                           valorItensItem,
@@ -531,9 +532,15 @@ export function ReconciliationDashboard() {
                         const ext = extratoMap.get(String(item.numero_pedido));
                         const extTaxas = ext ? Number(ext.taxas_comissoes ?? 0) : null;
                         const extConciliado = extTaxas != null ? liq + extTaxas : null;
+                        const rowClass = cancelled ? "opacity-50 line-through bg-destructive/5" : "";
                         return (
-                          <TableRow key={item.id}>
-                            <TableCell className="text-xs font-mono">{item.numero_pedido || "—"}</TableCell>
+                          <TableRow key={item.id} className={rowClass}>
+                            <TableCell className="text-xs font-mono">
+                              <span className="flex items-center gap-1">
+                                {item.numero_pedido || "—"}
+                                {cancelled && <Badge variant="destructive" className="text-[8px] px-1 py-0 no-underline">Cancelado</Badge>}
+                              </span>
+                            </TableCell>
                             <TableCell className="text-xs text-right">{fmt(Number(item.valor_pdv ?? 0))}</TableCell>
                             <TableCell className="text-xs text-right text-destructive">{fmt(Number(item.incentivo_loja ?? 0))}</TableCell>
                             <TableCell className="text-xs text-right text-destructive">{fmt(Number(item.taxas_comissoes ?? 0))}</TableCell>

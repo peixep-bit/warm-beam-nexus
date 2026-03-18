@@ -16,6 +16,10 @@ const fmtDate = (d: string) => {
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
 };
+const isCancelado = (item: any) => {
+  const desc = String(item.descricao ?? "").toUpperCase();
+  return desc.includes("CANCELADO") || desc.includes("PARCIAL");
+};
 
 export function ReconciliationDashboard() {
   const [selectedMarca, setSelectedMarca] = useState("");

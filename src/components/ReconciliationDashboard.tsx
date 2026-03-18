@@ -25,15 +25,11 @@ export function ReconciliationDashboard() {
   const [selectedMarcaKey, setSelectedMarcaKey] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [searchPedido, setSearchPedido] = useState("");
-  // Fetch platforms for filter
-  const { data: allPlatforms = [] } = useQuery({
-    queryKey: ["platforms"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("platforms").select("*").order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
+
+  // Derive marca name and platformId from composite key "marca::platformId"
+  const selectedMarca = selectedMarcaKey ? selectedMarcaKey.split("::")[0] : "";
+  const selectedPlatformId = selectedMarcaKey ? selectedMarcaKey.split("::")[1] || "" : "";
+
 
   // Fetch distinct marcas from DB with platform info — each marca+platform = separate option
   const { data: marcaOptions = [] } = useQuery({

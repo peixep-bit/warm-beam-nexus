@@ -36,47 +36,43 @@ export function ReconciliationDashboard() {
     },
   });
 
-  // Fetch distinct marcas from DB with platform info
+  // Fetch distinct marcas from DB with platform info — each marca+platform = separate option
   const { data: marcaOptions = [] } = useQuery({
     queryKey: ["reconciliation-marcas"],
     queryFn: async () => {
-      // Get items with their import to know the platform
       const { data: items, error } = await supabase
         .from("statement_items")
         .select("marca, loja, cnpj, import_id");
       if (error) throw error;
 
-      // Get all imports to map platform_id
       const importIds = [...new Set((items || []).map((i: any) => i.import_id))];
       const { data: imports } = importIds.length > 0
         ? await supabase.from("statement_imports").select("id, platform_id").in("id", importIds)
         : { data: [] };
       const importMap = new Map((imports || []).map((imp: any) => [imp.id, imp.platform_id]));
 
-      // Get platforms for names
       const { data: platforms } = await supabase.from("platforms").select("id, name");
       const platformNameMap = new Map((platforms || []).map((p: any) => [p.id, p.name]));
 
-      const set = new Map<string, { label: string; platformIds: Set<string> }>();
+      // Key = marca + platformId so each combination is a separate option
+      const set = new Map<string, { marca: string; label: string; platformId: string }>();
       (items || []).forEach((i: any) => {
-        const key = i.marca || i.cnpj || "";
-        if (!key) return;
+        const marca = i.marca || i.cnpj || "";
+        if (!marca) return;
         const platformId = importMap.get(i.import_id) || "";
         const platformName = platformNameMap.get(platformId) || "";
-        
-        if (!set.has(key)) {
-          const label = i.marca
-            ? i.marca + (platformName ? ` — ${platformName}` : "") + (i.loja ? ` — ${i.loja}` : "")
-            : i.cnpj || "";
-          set.set(key, { label, platformIds: new Set([platformId]) });
-        } else {
-          set.get(key)!.platformIds.add(platformId);
+        const compositeKey = `${marca}::${platformId}`;
+
+        if (!set.has(compositeKey)) {
+          const label = marca + (platformName ? ` — ${platformName}` : "") + (i.loja ? ` — ${i.loja}` : "");
+          set.set(compositeKey, { marca, label, platformId });
         }
       });
-      return Array.from(set.entries()).map(([value, info]) => ({
-        value,
+      return Array.from(set.entries()).map(([compositeKey, info]) => ({
+        value: compositeKey,
+        marca: info.marca,
         label: info.label,
-        platformIds: Array.from(info.platformIds),
+        platformId: info.platformId,
       }));
     },
   });

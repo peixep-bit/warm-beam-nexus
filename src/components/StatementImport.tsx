@@ -289,7 +289,7 @@ export function StatementImport() {
 
         <Button
           onClick={() => importMutation.mutate()}
-          disabled={!platformId || parsedData.length === 0 || importMutation.isPending || parsing}
+          disabled={(!platformId && detectedParceiro.length <= 1) || parsedData.length === 0 || importMutation.isPending || parsing}
           className="w-full"
           size="sm"
         >

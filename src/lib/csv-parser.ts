@@ -205,7 +205,7 @@ export function parseCSV(text: string): ParsedRow[] {
 
 // @ts-ignore - read-excel-file has built-in types but TS may not resolve them
 export async function parseXLSX(file: File): Promise<ParsedRow[]> {
-  const readXlsxFile = (await import("read-excel-file/web")).default;
+  const readXlsxFile = (await import("read-excel-file/browser")).default;
   const rows = await readXlsxFile(file);
 
   if (rows.length < 2) return [];

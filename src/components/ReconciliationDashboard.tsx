@@ -160,11 +160,11 @@ export function ReconciliationDashboard() {
     enabled: !!selectedMarca && !!selectedDate,
   });
 
-  // Filter by platform if selected
+  // Filter by platform from the selected marca key
   const dayItems = useMemo(() => {
-    if (selectedPlatformFilter === "__all__") return rawDayItems;
-    return rawDayItems.filter((i: any) => i.statement_imports?.platform_id === selectedPlatformFilter);
-  }, [rawDayItems, selectedPlatformFilter]);
+    if (!selectedPlatformId) return rawDayItems;
+    return rawDayItems.filter((i: any) => i.statement_imports?.platform_id === selectedPlatformId);
+  }, [rawDayItems, selectedPlatformId]);
 
   // Separate PDV and Extrato items
   const pdvItems = useMemo(() => dayItems.filter((i: any) => i.source_type === "pdv"), [dayItems]);

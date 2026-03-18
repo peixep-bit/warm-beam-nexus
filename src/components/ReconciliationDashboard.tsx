@@ -216,7 +216,9 @@ export function ReconciliationDashboard() {
 
   const totals = useMemo(() => {
     const sourceItems = pdvItems.length > 0 ? pdvItems : dayItems;
-    const sum = (key: string, items: any[] = sourceItems) => items.reduce((s: number, i: any) => s + Number(i[key] ?? 0), 0);
+    const activeItems = sourceItems.filter((i: any) => !isCancelado(i));
+    const cancelados = sourceItems.filter((i: any) => isCancelado(i));
+    const sum = (key: string, items: any[] = activeItems) => items.reduce((s: number, i: any) => s + Number(i[key] ?? 0), 0);
     const valorItens = sum("valor_pdv");
     const incentivoLoja = sum("incentivo_loja");
     const taxasComissoes = sum("taxas_comissoes");
@@ -226,13 +228,22 @@ export function ReconciliationDashboard() {
     const valorBruto = sum("valor_bruto");
     const baseValues: BaseValues = { LiqPDV: totalLiquido, ValorItens: valorItens, ValorBruto: valorBruto };
     const { deductions, conciliado } = aplicarRegras(baseValues, activeRules);
+
+    // Cancelled totals
+    const canceladoLiq = cancelados.reduce((s: number, i: any) => s + calcularTotalLiquidoPDV(
+      Number(i.valor_pdv ?? 0), Number(i.incentivo_loja ?? 0), Number(i.taxas_comissoes ?? 0),
+      Number(i.valor_taxa_entrega ?? 0), Number(i.desconto ?? 0)
+    ), 0);
+
     return {
       valorItens, incentivoLoja, taxasComissoes,
       incentivoIfood: sum("incentivo_ifood"),
       taxaServico: sum("taxa_servico"),
       taxaEntrega, desconto,
       liquidoPlataforma: sum("valor_liquido"),
-      totalLiquido, pedidos: sourceItems.length,
+      totalLiquido, pedidos: activeItems.length,
+      cancelados: cancelados.length, canceladoLiq,
+      totalPedidos: sourceItems.length,
       extratoLiquido: sum("valor_liquido", extratoItems),
       extratoTaxas: sum("taxas_comissoes", extratoItems),
       extratoPedidos: extratoItems.length,

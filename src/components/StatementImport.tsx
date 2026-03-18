@@ -185,6 +185,7 @@ export function StatementImport() {
             <Select value={platformId} onValueChange={setPlatformId}>
               <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="__all__">📋 Todas</SelectItem>
                 {platforms.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
               </SelectContent>
             </Select>

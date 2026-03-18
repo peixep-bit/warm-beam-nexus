@@ -356,6 +356,7 @@ export function ReconciliationDashboard() {
               {/* Dynamic rules deductions */}
               {hasRules && (
                 <div className="border-t mt-3 pt-3">
+                  <p className="text-xs text-muted-foreground mb-2 font-semibold">📐 Conciliação por Regras</p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-sm">
                     {totals.deductions.map((d, idx) => (
                       <div key={idx}>
@@ -364,8 +365,29 @@ export function ReconciliationDashboard() {
                       </div>
                     ))}
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1 font-semibold">Conciliado</p>
-                      <p className="font-bold text-lg text-green-700">{fmt(totals.conciliado)}</p>
+                      <p className="text-xs text-muted-foreground mb-1 font-semibold">Conc. Regras</p>
+                      <p className="font-bold text-lg text-amber-700">{fmt(totals.conciliado)}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Extrato-based conciliation */}
+              {hasBothSources && (
+                <div className="border-t mt-3 pt-3">
+                  <p className="text-xs text-muted-foreground mb-2 font-semibold">📋 Conciliação pelo Extrato</p>
+                  <div className="grid grid-cols-3 gap-3 text-center text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Líq. PDV</p>
+                      <p className="font-bold text-lg text-primary">{fmt(totals.totalLiquido)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Taxas Extrato</p>
+                      <p className="font-bold text-lg text-destructive">{fmt(totals.extratoTaxas)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1 font-semibold">Líq. Extrato</p>
+                      <p className="font-bold text-lg text-green-700">{fmt(totals.totalLiquido + totals.extratoTaxas)}</p>
                     </div>
                   </div>
                 </div>
@@ -467,7 +489,9 @@ export function ReconciliationDashboard() {
                         {activeRules.map((rule, idx) => (
                           <TableHead key={idx} className="text-xs text-right text-destructive">{rule.name}</TableHead>
                         ))}
-                        {hasRules && <TableHead className="text-xs text-right font-bold bg-green-500/10">Conciliado</TableHead>}
+                        {hasRules && <TableHead className="text-xs text-right font-bold bg-amber-500/10">Conc. Regras</TableHead>}
+                        {hasBothSources && <TableHead className="text-xs text-right text-destructive font-bold bg-destructive/5">Taxas Extrato</TableHead>}
+                        {hasBothSources && <TableHead className="text-xs text-right font-bold bg-green-500/10">Líq. Extrato</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -482,6 +506,10 @@ export function ReconciliationDashboard() {
                         );
                         const itemBaseValues: BaseValues = { LiqPDV: liq, ValorItens: valorItensItem, ValorBruto: Number(item.valor_bruto ?? 0) };
                         const { deductions, conciliado } = aplicarRegras(itemBaseValues, activeRules);
+                        // Cross-reference with extrato
+                        const ext = extratoMap.get(String(item.numero_pedido));
+                        const extTaxas = ext ? Number(ext.taxas_comissoes ?? 0) : null;
+                        const extConciliado = extTaxas != null ? liq + extTaxas : null;
                         return (
                           <TableRow key={item.id}>
                             <TableCell className="text-xs font-mono">{item.numero_pedido || "—"}</TableCell>
@@ -494,7 +522,17 @@ export function ReconciliationDashboard() {
                             {deductions.map((d, idx) => (
                               <TableCell key={idx} className="text-xs text-right text-destructive font-medium">{fmt(d.value)}</TableCell>
                             ))}
-                            {hasRules && <TableCell className="text-xs text-right font-bold bg-green-500/10 text-green-700">{fmt(conciliado)}</TableCell>}
+                            {hasRules && <TableCell className="text-xs text-right font-bold bg-amber-500/10 text-amber-700">{fmt(conciliado)}</TableCell>}
+                            {hasBothSources && (
+                              <TableCell className="text-xs text-right text-destructive font-medium bg-destructive/5">
+                                {extTaxas != null ? fmt(extTaxas) : "—"}
+                              </TableCell>
+                            )}
+                            {hasBothSources && (
+                              <TableCell className="text-xs text-right font-bold bg-green-500/10 text-green-700">
+                                {extConciliado != null ? fmt(extConciliado) : "—"}
+                              </TableCell>
+                            )}
                           </TableRow>
                         );
                       })}

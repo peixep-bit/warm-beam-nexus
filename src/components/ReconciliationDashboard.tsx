@@ -336,8 +336,14 @@ export function ReconciliationDashboard() {
               <p className="text-5xl font-black text-primary tabular-nums">
                 {fmt(totals.totalLiquido)}
               </p>
-              <div className="flex items-center justify-center gap-3 mt-3 text-xs text-muted-foreground">
-                <Badge variant="secondary">{totals.pedidos} pedido(s) PDV</Badge>
+              <div className="flex items-center justify-center gap-3 mt-3 text-xs text-muted-foreground flex-wrap">
+                <Badge variant="secondary">{totals.pedidos} pedido(s) ativos</Badge>
+                {totals.cancelados > 0 && (
+                  <Badge variant="destructive" className="text-[10px]">
+                    <XCircle className="h-3 w-3 mr-0.5" />
+                    {totals.cancelados} cancelado(s) — {fmt(totals.canceladoLiq)} excluído(s)
+                  </Badge>
+                )}
                 {hasBothSources && <Badge variant="outline">{totals.extratoPedidos} no extrato</Badge>}
                 <span>{fmtDate(selectedDate)}</span>
                 <span>{selectedMarca}</span>

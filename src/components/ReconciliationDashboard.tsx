@@ -309,26 +309,14 @@ export function ReconciliationDashboard() {
       {/* Selectors */}
       <Card>
         <CardContent className="pt-6">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <div>
               <Label className="text-xs font-medium text-muted-foreground">Marca</Label>
-              <Select value={selectedMarca} onValueChange={(v) => { setSelectedMarca(v); setSelectedDate(""); setSelectedPlatformFilter("__all__"); }}>
+              <Select value={selectedMarcaKey} onValueChange={(v) => { setSelectedMarcaKey(v); setSelectedDate(""); }}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {marcaOptions.map((o) => (
                     <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs font-medium text-muted-foreground">Plataforma</Label>
-              <Select value={selectedPlatformFilter} onValueChange={setSelectedPlatformFilter} disabled={!selectedMarca}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Todas" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">Todas</SelectItem>
-                  {allPlatforms.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

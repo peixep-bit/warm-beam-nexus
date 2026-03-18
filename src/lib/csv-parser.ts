@@ -204,27 +204,19 @@ export function parseCSV(text: string): ParsedRow[] {
 }
 
 export async function parseXLSX(file: File): Promise<ParsedRow[]> {
-  // Dynamic import to avoid React duplicate instance issues
-  const XLSX = await import("xlsx");
-  const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: "array", cellDates: false });
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
+  const readXlsxFile = (await import("read-excel-file")).default;
+  const rows = await readXlsxFile(file);
 
-  const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-    defval: "",
-    raw: true,
-  });
+  if (rows.length < 2) return [];
 
-  if (jsonData.length === 0) return [];
+  const headers = rows[0].map(h => normalizeHeader(String(h ?? "")));
 
-  return jsonData.map(raw => {
+  return rows.slice(1).map(values => {
     const record: Record<string, string | number> = {};
-    for (const key of Object.keys(raw)) {
-      const normalized = normalizeHeader(key);
-      const val = raw[key];
-      record[normalized] = typeof val === "number" ? val : String(val ?? "");
-    }
+    headers.forEach((h, idx) => {
+      const val = values[idx];
+      record[h] = typeof val === "number" ? val : String(val ?? "");
+    });
     return rowFromRecord(record);
   });
 }

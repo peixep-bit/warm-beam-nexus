@@ -153,13 +153,13 @@ export function ReconciliationDashboard() {
   });
 
   // Fetch items for the selected marca + date
-  const { data: dayItems = [] } = useQuery({
+  const { data: rawDayItems = [] } = useQuery({
     queryKey: ["reconciliation-day", selectedMarca, selectedDate],
     queryFn: async () => {
       if (!selectedMarca || !selectedDate) return [];
       const { data, error } = await supabase
         .from("statement_items")
-        .select("*")
+        .select("*, statement_imports!inner(platform_id)")
         .or(`marca.eq.${selectedMarca},cnpj.eq.${selectedMarca}`)
         .eq("data_transacao", selectedDate)
         .order("numero_pedido");
@@ -168,6 +168,12 @@ export function ReconciliationDashboard() {
     },
     enabled: !!selectedMarca && !!selectedDate,
   });
+
+  // Filter by platform if selected
+  const dayItems = useMemo(() => {
+    if (selectedPlatformFilter === "__all__") return rawDayItems;
+    return rawDayItems.filter((i: any) => i.statement_imports?.platform_id === selectedPlatformFilter);
+  }, [rawDayItems, selectedPlatformFilter]);
 
   // Separate PDV and Extrato items
   const pdvItems = useMemo(() => dayItems.filter((i: any) => i.source_type === "pdv"), [dayItems]);

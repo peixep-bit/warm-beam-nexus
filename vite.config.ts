@@ -53,9 +53,6 @@ export default defineConfig(({ mode }) => ({
       },
     }),
   ].filter(Boolean),
-  optimizeDeps: {
-    exclude: ["read-excel-file"],
-  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

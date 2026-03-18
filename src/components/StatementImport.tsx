@@ -103,7 +103,7 @@ export function StatementImport() {
 
       const { data: imp, error: impErr } = await supabase.from("statement_imports").insert({
         user_id: user!.id,
-        platform_id: platformId,
+        platform_id: effectivePlatformId,
         file_name: fileName,
         cnpj: cnpj || null,
         loja: loja || null,

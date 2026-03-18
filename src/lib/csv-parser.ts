@@ -206,7 +206,7 @@ export function parseCSV(text: string): ParsedRow[] {
 export async function parseXLSX(file: File): Promise<ParsedRow[]> {
   try {
     // Try read-excel-file first (safer, no CVE issues)
-    const readXlsxFile = (await import("read-excel-file/browser")).default;
+    const readXlsxFile = (await import("read-excel-file/web")).default;
     const rows = await readXlsxFile(file);
     if (rows.length < 2) return [];
     const headers = rows[0].map(h => normalizeHeader(String(h ?? "")));

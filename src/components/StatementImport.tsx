@@ -82,7 +82,12 @@ export function StatementImport() {
 
   const importMutation = useMutation({
     mutationFn: async () => {
+      if ((!platformId || platformId === "__all__") && platforms.length === 0) throw new Error("Cadastre ao menos uma plataforma");
       if (!platformId || parsedData.length === 0) throw new Error("Selecione plataforma e arquivo");
+
+      // If "Todas" is selected, use the first platform as default (required FK)
+      const effectivePlatformId = platformId === "__all__" ? platforms[0]?.id : platformId;
+      if (!effectivePlatformId) throw new Error("Nenhuma plataforma disponível");
 
       // Filter by selected marca if applicable
       const dataToImport = (marca && marca !== "__all__")

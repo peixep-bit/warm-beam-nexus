@@ -240,7 +240,7 @@ export async function parseXLSX(file: File): Promise<{ rows: ParsedRow[]; metada
     raw: true,
   });
 
-  const metadata = extractMetadata(workbook);
+  const metadata = extractMetadata(workbook, XLSX);
 
   // Find the data sheet (first sheet that is NOT "Dados de Origem" or "Legendas")
   const dataSheetName = workbook.SheetNames.find((n: string) => {

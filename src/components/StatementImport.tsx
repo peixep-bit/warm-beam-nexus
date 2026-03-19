@@ -205,9 +205,9 @@ export function StatementImport() {
       setParsedData([]);
       setFileName("");
       setPlatformId("");
-      setCnpj("");
       setLoja("");
       setMarca("");
+      setFileMetadata({});
       if (fileRef.current) fileRef.current.value = "";
     },
     onError: (err: any) => toast({ title: "Erro", description: err.message, variant: "destructive" }),

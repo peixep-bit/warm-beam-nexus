@@ -255,7 +255,13 @@ export function ReconciliationDashboard() {
     const taxasComissoes = sum("taxas_comissoes");
     const taxaEntrega = sum("valor_taxa_entrega");
     const desconto = sum("desconto");
-    const totalLiquido = calcularTotalLiquidoPDV(valorItens, incentivoLoja, taxasComissoes, taxaEntrega, desconto);
+    // Soma por pedido para respeitar o Math.max(0, entrega - desconto) de cada item individualmente
+    const totalLiquido = activeItems.reduce((s: number, i: any) =>
+      s + calcularTotalLiquidoPDV(
+        Number(i.valor_pdv ?? 0), Number(i.incentivo_loja ?? 0),
+        Number(i.taxas_comissoes ?? 0), Number(i.valor_taxa_entrega ?? 0),
+        Number(i.desconto ?? 0)
+      ), 0);
     const valorBruto = sum("valor_bruto");
     const baseValues: BaseValues = { LiqPDV: totalLiquido, ValorItens: valorItens, ValorBruto: valorBruto };
     const { deductions, conciliado } = aplicarRegras(baseValues, activeRules);

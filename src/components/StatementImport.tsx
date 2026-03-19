@@ -67,11 +67,16 @@ export function StatementImport() {
     setFileName(file.name);
     setParsing(true);
     try {
-      const rows = await parseFile(file);
+      const { rows, metadata } = await parseFile(file);
       setParsedData(rows);
-      // Auto-detect loja from file
-      const lojas = new Set(rows.map((r: any) => r.loja).filter(Boolean));
-      if (lojas.size === 1) setLoja(Array.from(lojas)[0]);
+      setFileMetadata(metadata);
+      // Auto-detect loja from metadata or file data
+      if (metadata.loja) {
+        setLoja(metadata.loja);
+      } else {
+        const lojas = new Set(rows.map((r: any) => r.loja).filter(Boolean));
+        if (lojas.size === 1) setLoja(Array.from(lojas)[0] as string);
+      }
       toast({ title: `${rows.length} linhas encontradas` });
     } catch (err: any) {
       toast({ title: "Erro ao ler arquivo", description: err.message, variant: "destructive" });

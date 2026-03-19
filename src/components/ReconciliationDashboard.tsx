@@ -417,8 +417,8 @@ export function ReconciliationDashboard() {
                       </div>
                     ))}
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1 font-semibold">Conc. Regras</p>
-                      <p className="font-bold text-lg text-amber-700">{fmt(totals.conciliado)}</p>
+                      <p className="text-xs text-muted-foreground mb-1 font-semibold">Conc. Manutenção</p>
+                      <p className="font-bold text-lg text-green-700">{fmt(totals.conciliado)}</p>
                     </div>
                   </div>
                 </div>
@@ -541,7 +541,7 @@ export function ReconciliationDashboard() {
                         {activeRules.map((rule, idx) => (
                           <TableHead key={idx} className="text-xs text-right text-destructive">{rule.name}</TableHead>
                         ))}
-                        {hasRules && <TableHead className="text-xs text-right font-bold bg-amber-500/10">Conc. Regras</TableHead>}
+                        {hasRules && <TableHead className="text-xs text-right font-bold bg-green-500/10">Conc. Manutenção</TableHead>}
                         {hasBothSources && <TableHead className="text-xs text-right text-destructive font-bold bg-destructive/5">Taxas Extrato</TableHead>}
                         {hasBothSources && <TableHead className="text-xs text-right font-bold bg-green-500/10">Líq. Extrato</TableHead>}
                       </TableRow>
@@ -581,7 +581,7 @@ export function ReconciliationDashboard() {
                             {deductions.map((d, idx) => (
                               <TableCell key={idx} className="text-xs text-right text-destructive font-medium">{fmt(d.value)}</TableCell>
                             ))}
-                            {hasRules && <TableCell className="text-xs text-right font-bold bg-amber-500/10 text-amber-700">{fmt(conciliado)}</TableCell>}
+                            {hasRules && <TableCell className="text-xs text-right font-bold bg-green-500/10 text-green-700">{fmt(conciliado)}</TableCell>}
                             {hasBothSources && (
                               <TableCell className="text-xs text-right text-destructive font-medium bg-destructive/5">
                                 {extTaxas != null ? fmt(extTaxas) : "—"}

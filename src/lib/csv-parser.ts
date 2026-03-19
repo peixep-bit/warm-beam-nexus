@@ -210,18 +210,16 @@ export function parseCSV(text: string): ParsedRow[] {
   return rows;
 }
 
-export function extractMetadata(workbook: any): FileMetadata {
+export function extractMetadata(workbook: any, XLSX: any): FileMetadata {
   const meta: FileMetadata = {};
-  // Try "Dados de Origem" sheet
   const metaSheetName = workbook.SheetNames.find((n: string) =>
     n.toLowerCase().includes("dados de origem") || n.toLowerCase().includes("dados_de_origem")
   );
   if (metaSheetName) {
     const ws = workbook.Sheets[metaSheetName];
-    const XLSX = require("xlsx");
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { header: 1, defval: "" });
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" }) as any[][];
     for (const row of rows) {
-      const cells = Object.values(row).map((v: any) => String(v ?? "").trim());
+      const cells = (Array.isArray(row) ? row : Object.values(row)).map((v: any) => String(v ?? "").trim());
       const key = cells[0]?.toLowerCase() || "";
       const val = cells[1] || "";
       if (key.includes("loja")) meta.loja = val;

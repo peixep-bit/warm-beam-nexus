@@ -26,7 +26,9 @@ export function calcularTotalLiquidoPDV(
   const comissoes = taxasEComissoes ?? 0;     // vem negativo do iFood
   const entrega = taxaEntrega ?? 0;           // positivo
   const desc = desconto ?? 0;                 // positivo
-  return itens + incentivo + comissoes + entrega - desc;
+  // Se o desconto sobre taxa de entrega for maior que a própria taxa, zerar (não ficar negativo)
+  const entregaLiquida = Math.max(0, entrega - desc);
+  return itens + incentivo + comissoes + entregaLiquida;
 }
 
 /**

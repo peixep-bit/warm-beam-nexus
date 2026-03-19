@@ -91,8 +91,9 @@ function rowFromRecord(row: Record<string, string | number>): ParsedRow {
     // Desconto = descontos sobre taxa de entrega (loja + parceiro)
     const desconto = descontoLojaTaxaEntrega + descontoParceiroTaxaEntrega;
 
-    // valor_liquido_conciliado = Total Produtos + Incentivo Loja + Taxa Entrega - Desconto
-    const valorLiquidoConciliado = totalProdutos + incentivoLoja + taxaEntrega - desconto;
+    // Se desconto sobre taxa de entrega > taxa de entrega, zerar a contribuição de entrega
+    const entregaLiquida = Math.max(0, taxaEntrega - desconto);
+    const valorLiquidoConciliado = totalProdutos + incentivoLoja + entregaLiquida;
 
     return {
       data_transacao: parseDate(get("data")),
@@ -144,12 +145,13 @@ function rowFromRecord(row: Record<string, string | number>): ParsedRow {
     "faturado_pdv", "valor_cardapio", "preco_cardapio"
   ));
 
-  // Valor líquido conciliado = VALOR DOS ITENS + INCENTIVO LOJA + TAXAS E COMISSOES + TAXA ENTREGA - DESCONTO
-  const taxaEntrega = parseNumber(get(
+  // Valor líquido conciliado = VALOR DOS ITENS + INCENTIVO LOJA + TAXAS E COMISSOES + max(0, TAXA ENTREGA - DESCONTO)
+    const taxaEntrega = parseNumber(get(
     "taxa_de_entrega_paga_pelo_cliente__r__", "taxa_de_entrega_paga_pelo_cliente",
     "taxa_entrega", "valor_taxa_entrega", "frete", "delivery_fee", "entrega"
   ));
-  const valorLiquidoConciliado = valorPdv + incLoja + taxasComissoes + taxaEntrega - desconto;
+  const entregaLiquida = Math.max(0, taxaEntrega - desconto);
+  const valorLiquidoConciliado = valorPdv + incLoja + taxasComissoes + entregaLiquida;
 
   return {
     data_transacao: parseDate(get(

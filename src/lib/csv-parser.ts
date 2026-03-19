@@ -269,7 +269,7 @@ export async function parseXLSX(file: File): Promise<{ rows: ParsedRow[]; metada
   return { rows, metadata };
 }
 
-export async function parseFile(file: File): Promise<ParsedRow[]> {
+export async function parseFile(file: File): Promise<{ rows: ParsedRow[]; metadata: FileMetadata }> {
   const ext = file.name.split(".").pop()?.toLowerCase();
   if (ext === "xlsx" || ext === "xls") {
     return parseXLSX(file);
@@ -278,7 +278,7 @@ export async function parseFile(file: File): Promise<ParsedRow[]> {
     const reader = new FileReader();
     reader.onload = ev => {
       try {
-        resolve(parseCSV(ev.target?.result as string));
+        resolve({ rows: parseCSV(ev.target?.result as string), metadata: {} });
       } catch (e) {
         reject(e);
       }

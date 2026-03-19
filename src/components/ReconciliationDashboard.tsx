@@ -541,7 +541,7 @@ export function ReconciliationDashboard() {
                         {activeRules.map((rule, idx) => (
                           <TableHead key={idx} className="text-xs text-right text-destructive">{rule.name}</TableHead>
                         ))}
-                        {hasRules && <TableHead className="text-xs text-right font-bold bg-amber-500/10">Conc. Regras</TableHead>}
+                        {hasRules && <TableHead className="text-xs text-right font-bold bg-green-500/10">Conc. Manutenção</TableHead>}
                         {hasBothSources && <TableHead className="text-xs text-right text-destructive font-bold bg-destructive/5">Taxas Extrato</TableHead>}
                         {hasBothSources && <TableHead className="text-xs text-right font-bold bg-green-500/10">Líq. Extrato</TableHead>}
                       </TableRow>

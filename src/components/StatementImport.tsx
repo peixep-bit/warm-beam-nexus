@@ -20,7 +20,7 @@ export function StatementImport() {
   const [sourceType, setSourceType] = useState<"extrato" | "pdv">("extrato");
   const [marca, setMarca] = useState("");
   const [fileName, setFileName] = useState("");
-  const [cnpj, setCnpj] = useState("");
+  const [fileMetadata, setFileMetadata] = useState<FileMetadata>({});
   const [loja, setLoja] = useState("");
   const [parsedData, setParsedData] = useState<any[]>([]);
   const [parsing, setParsing] = useState(false);

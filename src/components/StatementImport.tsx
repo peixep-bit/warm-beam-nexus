@@ -2,7 +2,7 @@ import { useState, useRef, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { parseFile } from "@/lib/csv-parser";
+import { parseFile, FileMetadata } from "@/lib/csv-parser";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -20,7 +20,7 @@ export function StatementImport() {
   const [sourceType, setSourceType] = useState<"extrato" | "pdv">("extrato");
   const [marca, setMarca] = useState("");
   const [fileName, setFileName] = useState("");
-  const [cnpj, setCnpj] = useState("");
+  const [fileMetadata, setFileMetadata] = useState<FileMetadata>({});
   const [loja, setLoja] = useState("");
   const [parsedData, setParsedData] = useState<any[]>([]);
   const [parsing, setParsing] = useState(false);
@@ -67,11 +67,16 @@ export function StatementImport() {
     setFileName(file.name);
     setParsing(true);
     try {
-      const rows = await parseFile(file);
+      const { rows, metadata } = await parseFile(file);
       setParsedData(rows);
-      // Auto-detect loja from file
-      const lojas = new Set(rows.map((r: any) => r.loja).filter(Boolean));
-      if (lojas.size === 1) setLoja(Array.from(lojas)[0]);
+      setFileMetadata(metadata);
+      // Auto-detect loja from metadata or file data
+      if (metadata.loja) {
+        setLoja(metadata.loja);
+      } else {
+        const lojas = new Set(rows.map((r: any) => r.loja).filter(Boolean));
+        if (lojas.size === 1) setLoja(Array.from(lojas)[0] as string);
+      }
       toast({ title: `${rows.length} linhas encontradas` });
     } catch (err: any) {
       toast({ title: "Erro ao ler arquivo", description: err.message, variant: "destructive" });
@@ -144,8 +149,8 @@ export function StatementImport() {
           user_id: user!.id,
           platform_id: effectivePlatformId,
           file_name: fileName + (parceiro !== "__default__" ? ` [${parceiro}]` : ""),
-          cnpj: cnpj || null,
-          loja: loja || null,
+          loja: loja || fileMetadata.loja || null,
+          cnpj: null,
           total_bruto: sum("valor_bruto"),
           total_taxas: sum("taxa"),
           total_descontos: sum("desconto"),
@@ -162,8 +167,8 @@ export function StatementImport() {
           import_id: imp.id,
           user_id: user!.id,
           data_transacao: r.data_transacao,
-          loja: r.loja || loja || null,
-          cnpj: r.cnpj || cnpj || null,
+          loja: r.loja || loja || fileMetadata.loja || null,
+          cnpj: r.cnpj || null,
           descricao: r.descricao,
           quantidade_pedidos: r.quantidade_pedidos,
           valor_pdv: r.valor_pdv,
@@ -200,9 +205,9 @@ export function StatementImport() {
       setParsedData([]);
       setFileName("");
       setPlatformId("");
-      setCnpj("");
       setLoja("");
       setMarca("");
+      setFileMetadata({});
       if (fileRef.current) fileRef.current.value = "";
     },
     onError: (err: any) => toast({ title: "Erro", description: err.message, variant: "destructive" }),
@@ -236,8 +241,8 @@ export function StatementImport() {
             </Select>
           </div>
           <div>
-            <Label className="text-xs">CNPJ</Label>
-            <Input placeholder="00.000.000/0001-00" value={cnpj} onChange={e => setCnpj(e.target.value)} className="mt-1 h-9" />
+            <Label className="text-xs">Loja</Label>
+            <Input placeholder="Ex: 0049 - DK Itaim" value={loja} onChange={e => setLoja(e.target.value)} className="mt-1 h-9" />
           </div>
         </div>
 

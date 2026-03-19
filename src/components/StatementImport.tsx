@@ -241,8 +241,8 @@ export function StatementImport() {
             </Select>
           </div>
           <div>
-            <Label className="text-xs">CNPJ</Label>
-            <Input placeholder="00.000.000/0001-00" value={cnpj} onChange={e => setCnpj(e.target.value)} className="mt-1 h-9" />
+            <Label className="text-xs">Loja</Label>
+            <Input placeholder="Ex: 0049 - DK Itaim" value={loja} onChange={e => setLoja(e.target.value)} className="mt-1 h-9" />
           </div>
         </div>
 

@@ -210,7 +210,30 @@ export function parseCSV(text: string): ParsedRow[] {
   return rows;
 }
 
-export async function parseXLSX(file: File): Promise<ParsedRow[]> {
+export function extractMetadata(workbook: any): FileMetadata {
+  const meta: FileMetadata = {};
+  // Try "Dados de Origem" sheet
+  const metaSheetName = workbook.SheetNames.find((n: string) =>
+    n.toLowerCase().includes("dados de origem") || n.toLowerCase().includes("dados_de_origem")
+  );
+  if (metaSheetName) {
+    const ws = workbook.Sheets[metaSheetName];
+    const XLSX = require("xlsx");
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { header: 1, defval: "" });
+    for (const row of rows) {
+      const cells = Object.values(row).map((v: any) => String(v ?? "").trim());
+      const key = cells[0]?.toLowerCase() || "";
+      const val = cells[1] || "";
+      if (key.includes("loja")) meta.loja = val;
+      if (key.includes("datas")) meta.datas = val;
+      if (key.includes("parceiro")) meta.parceiros = val;
+      if (key.includes("gerado")) meta.gerado_em = val;
+    }
+  }
+  return meta;
+}
+
+export async function parseXLSX(file: File): Promise<{ rows: ParsedRow[]; metadata: FileMetadata }> {
   const XLSX = await import("xlsx");
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, {
@@ -218,23 +241,34 @@ export async function parseXLSX(file: File): Promise<ParsedRow[]> {
     cellDates: false,
     raw: true,
   });
-  const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-  if (!worksheet) return [];
+
+  const metadata = extractMetadata(workbook);
+
+  // Find the data sheet (first sheet that is NOT "Dados de Origem" or "Legendas")
+  const dataSheetName = workbook.SheetNames.find((n: string) => {
+    const lower = n.toLowerCase();
+    return !lower.includes("dados de origem") && !lower.includes("legendas");
+  }) || workbook.SheetNames[0];
+
+  const worksheet = workbook.Sheets[dataSheetName];
+  if (!worksheet) return { rows: [], metadata };
 
   const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
     defval: "",
     raw: true,
   });
 
-  if (json.length === 0) return [];
+  if (json.length === 0) return { rows: [], metadata };
 
-  return json.map((row) => {
+  const rows = json.map((row) => {
     const record: Record<string, string | number> = {};
     for (const [key, value] of Object.entries(row)) {
       record[normalizeHeader(key)] = typeof value === "number" ? value : String(value ?? "");
     }
     return rowFromRecord(record);
   });
+
+  return { rows, metadata };
 }
 
 export async function parseFile(file: File): Promise<ParsedRow[]> {

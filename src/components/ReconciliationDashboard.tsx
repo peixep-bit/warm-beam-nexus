@@ -417,8 +417,8 @@ export function ReconciliationDashboard() {
                       </div>
                     ))}
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1 font-semibold">Conc. Regras</p>
-                      <p className="font-bold text-lg text-amber-700">{fmt(totals.conciliado)}</p>
+                      <p className="text-xs text-muted-foreground mb-1 font-semibold">Conc. Manutenção</p>
+                      <p className="font-bold text-lg text-green-700">{fmt(totals.conciliado)}</p>
                     </div>
                   </div>
                 </div>

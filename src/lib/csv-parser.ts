@@ -91,8 +91,9 @@ function rowFromRecord(row: Record<string, string | number>): ParsedRow {
     // Desconto = descontos sobre taxa de entrega (loja + parceiro)
     const desconto = descontoLojaTaxaEntrega + descontoParceiroTaxaEntrega;
 
-    // valor_liquido_conciliado = Total Produtos + Incentivo Loja + Taxa Entrega - Desconto
-    const valorLiquidoConciliado = totalProdutos + incentivoLoja + taxaEntrega - desconto;
+    // Se desconto sobre taxa de entrega > taxa de entrega, zerar a contribuição de entrega
+    const entregaLiquida = Math.max(0, taxaEntrega - desconto);
+    const valorLiquidoConciliado = totalProdutos + incentivoLoja + entregaLiquida;
 
     return {
       data_transacao: parseDate(get("data")),

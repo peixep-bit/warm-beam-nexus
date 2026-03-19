@@ -1,3 +1,10 @@
+export interface FileMetadata {
+  loja?: string;
+  datas?: string;
+  parceiros?: string;
+  gerado_em?: string;
+}
+
 export interface ParsedRow {
   data_transacao: string;
   loja: string;

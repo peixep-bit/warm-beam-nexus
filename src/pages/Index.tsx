@@ -12,7 +12,16 @@ import { Utensils, LogOut } from "lucide-react";
 export default function Index() {
   const { user, loading, signOut } = useAuth();
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="rounded-xl border border-border bg-card px-6 py-4 text-sm text-muted-foreground shadow-sm">
+          Carregando dados...
+        </div>
+      </div>
+    );
+  }
+
   if (!user) return <Navigate to="/auth" replace />;
 
   return (

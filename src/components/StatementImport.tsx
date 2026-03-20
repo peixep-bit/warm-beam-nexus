@@ -64,10 +64,12 @@ export function StatementImport() {
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    console.log("[StatementImport] File selected:", file.name, file.size);
     setFileName(file.name);
     setParsing(true);
     try {
       const { rows, metadata } = await parseFile(file);
+      console.log("[StatementImport] Parsed rows:", rows.length, "metadata:", metadata);
       setParsedData(rows);
       setFileMetadata(metadata);
       // Auto-detect loja from metadata or file data
@@ -79,6 +81,7 @@ export function StatementImport() {
       }
       toast({ title: `${rows.length} linhas encontradas` });
     } catch (err: any) {
+      console.error("[StatementImport] Parse error:", err);
       toast({ title: "Erro ao ler arquivo", description: err.message, variant: "destructive" });
     } finally {
       setParsing(false);
@@ -98,6 +101,7 @@ export function StatementImport() {
 
   const importMutation = useMutation({
     mutationFn: async () => {
+      console.log("[StatementImport] Starting import. platforms:", platforms.length, "parsedData:", parsedData.length, "platformId:", platformId, "detectedParceiro:", detectedParceiro);
       if (platforms.length === 0) throw new Error("Cadastre ao menos uma plataforma");
       if (parsedData.length === 0) throw new Error("Selecione um arquivo");
 

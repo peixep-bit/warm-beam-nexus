@@ -101,6 +101,7 @@ export function StatementImport() {
 
   const importMutation = useMutation({
     mutationFn: async () => {
+      console.log("[StatementImport] Starting import. platforms:", platforms.length, "parsedData:", parsedData.length, "platformId:", platformId, "detectedParceiro:", detectedParceiro);
       if (platforms.length === 0) throw new Error("Cadastre ao menos uma plataforma");
       if (parsedData.length === 0) throw new Error("Selecione um arquivo");
 

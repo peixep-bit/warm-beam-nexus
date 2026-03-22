@@ -444,7 +444,7 @@ export function ReconciliationDashboard() {
                       <p className="font-bold text-lg text-destructive">{fmt(totals.extratoTaxas)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1 font-semibold">Líq. Extrato</p>
+                      <p className="text-xs text-muted-foreground mb-1 font-semibold">Conciliar</p>
                       <p className="font-bold text-lg text-green-700">{fmt(totals.totalLiquido + totals.extratoTaxas)}</p>
                     </div>
                   </div>

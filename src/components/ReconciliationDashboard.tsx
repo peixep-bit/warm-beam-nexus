@@ -283,6 +283,7 @@ export function ReconciliationDashboard() {
       totalPedidos: sourceItems.length,
       extratoLiquido: sum("valor_liquido", extratoItems),
       extratoTaxas: sum("taxas_comissoes", extratoItems),
+      extratoTaxasTotal: hasBothSources ? sum("taxas_comissoes", extratoItems) : sum("taxas_comissoes", activeItems),
       extratoPedidos: extratoItems.length,
       deductions, conciliado,
     };
@@ -430,26 +431,24 @@ export function ReconciliationDashboard() {
                 </div>
               )}
 
-              {/* Extrato-based conciliation */}
-              {hasBothSources && (
-                <div className="border-t mt-3 pt-3">
-                  <p className="text-xs text-muted-foreground mb-2 font-semibold">📋 Conciliação pelo Extrato</p>
-                  <div className="grid grid-cols-3 gap-3 text-center text-sm">
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Líq. PDV</p>
-                      <p className="font-bold text-lg text-primary">{fmt(totals.totalLiquido)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Taxas Extrato</p>
-                      <p className="font-bold text-lg text-destructive">{fmt(totals.extratoTaxas)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1 font-semibold">Conciliar</p>
-                      <p className="font-bold text-lg text-green-700">{fmt(totals.totalLiquido + totals.extratoTaxas)}</p>
-                    </div>
+              {/* Extrato-based conciliation — always visible */}
+              <div className="border-t mt-3 pt-3">
+                <p className="text-xs text-muted-foreground mb-2 font-semibold">📋 Conciliação pelo Extrato</p>
+                <div className="grid grid-cols-3 gap-3 text-center text-sm">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Líq. PDV</p>
+                    <p className="font-bold text-lg text-primary">{fmt(totals.totalLiquido)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Taxas Extrato</p>
+                    <p className="font-bold text-lg text-destructive">{fmt(totals.extratoTaxasTotal)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1 font-semibold">Conciliar</p>
+                    <p className="font-bold text-lg text-green-700">{fmt(totals.totalLiquido + totals.extratoTaxasTotal)}</p>
                   </div>
                 </div>
-              )}
+              </div>
 
               <p className="text-xs text-muted-foreground text-center mt-3 border-t pt-3">
                 Itens {fmt(totals.valorItens)} + Inc. Loja {fmt(totals.incentivoLoja)} + Com. {fmt(totals.taxasComissoes)} + Entrega {fmt(totals.taxaEntrega)} − Desc. {fmt(totals.desconto)} = <strong className="text-primary">{fmt(totals.totalLiquido)}</strong>
@@ -548,8 +547,8 @@ export function ReconciliationDashboard() {
                           <TableHead key={idx} className="text-xs text-right text-destructive">{rule.name}</TableHead>
                         ))}
                         {hasRules && <TableHead className="text-xs text-right font-bold bg-green-500/10">Conc. Manutenção</TableHead>}
-                        {hasBothSources && <TableHead className="text-xs text-right text-destructive font-bold bg-destructive/5">Taxas Extrato</TableHead>}
-                        {hasBothSources && <TableHead className="text-xs text-right font-bold bg-green-500/10">Conciliar</TableHead>}
+                        <TableHead className="text-xs text-right text-destructive font-bold bg-destructive/5">Taxas Extrato</TableHead>
+                        <TableHead className="text-xs text-right font-bold bg-green-500/10">Conciliar</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -565,10 +564,10 @@ export function ReconciliationDashboard() {
                         );
                         const itemBaseValues: BaseValues = { LiqPDV: liq, ValorItens: valorItensItem, ValorBruto: Number(item.valor_bruto ?? 0) };
                         const { deductions, conciliado } = aplicarRegras(itemBaseValues, activeRules);
-                        // Cross-reference with extrato
+                        // Cross-reference with extrato; fallback to item's own taxas_comissoes
                         const ext = extratoMap.get(String(item.numero_pedido));
-                        const extTaxas = ext ? Number(ext.taxas_comissoes ?? 0) : null;
-                        const extConciliado = extTaxas != null ? liq + extTaxas : null;
+                        const extTaxas = ext ? Number(ext.taxas_comissoes ?? 0) : Number(item.taxas_comissoes ?? 0);
+                        const extConciliado = liq + extTaxas;
                         const rowClass = cancelled ? "opacity-50 line-through bg-destructive/5" : "";
                         return (
                           <TableRow key={item.id} className={rowClass}>
@@ -588,16 +587,12 @@ export function ReconciliationDashboard() {
                               <TableCell key={idx} className="text-xs text-right text-destructive font-medium">{fmt(d.value)}</TableCell>
                             ))}
                             {hasRules && <TableCell className="text-xs text-right font-bold bg-green-500/10 text-green-700">{fmt(conciliado)}</TableCell>}
-                            {hasBothSources && (
-                              <TableCell className="text-xs text-right text-destructive font-medium bg-destructive/5">
-                                {extTaxas != null ? fmt(extTaxas) : "—"}
-                              </TableCell>
-                            )}
-                            {hasBothSources && (
-                              <TableCell className="text-xs text-right font-bold bg-green-500/10 text-green-700">
-                                {extConciliado != null ? fmt(extConciliado) : "—"}
-                              </TableCell>
-                            )}
+                            <TableCell className="text-xs text-right text-destructive font-medium bg-destructive/5">
+                              {fmt(extTaxas)}
+                            </TableCell>
+                            <TableCell className="text-xs text-right font-bold bg-green-500/10 text-green-700">
+                              {fmt(extConciliado)}
+                            </TableCell>
                           </TableRow>
                         );
                       })}

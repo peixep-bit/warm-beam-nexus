@@ -79,15 +79,17 @@ export function aplicarRegras(
     const base = baseValues[rule.base_field] ?? baseValues.LiqPDV;
     let value = 0;
     if (rule.percentage != null) {
-      value = base * (-Math.abs(rule.percentage) / 100); // always deduct
+      // Arredondamento financeiro: 2 casas decimais
+      value = Math.round(base * (-Math.abs(rule.percentage) / 100) * 100) / 100;
     }
     if (rule.fixed_amount != null) {
-      value += -Math.abs(rule.fixed_amount); // always deduct
+      value += -Math.abs(rule.fixed_amount);
     }
+    value = Math.round(value * 100) / 100;
     deductions.push({ name: rule.name, value });
-    total += value; // value is negative, so this deducts
+    total += value;
   }
-  return { deductions, conciliado: total };
+  return { deductions, conciliado: Math.round(total * 100) / 100 };
 }
 
 export function calcularTotalDiario(

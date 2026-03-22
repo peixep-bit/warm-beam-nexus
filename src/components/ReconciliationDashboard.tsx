@@ -96,21 +96,21 @@ export function ReconciliationDashboard() {
     enabled: !!selectedMarca,
   });
 
-  // Fetch fee rules filtered by marca AND platform
+  // Fetch fee rules filtered by marca AND selected platform only (avoid duplication)
   const { data: feeRules = [] } = useQuery({
-    queryKey: ["fee_rules_for_marca", selectedMarca, importPlatforms],
+    queryKey: ["fee_rules_for_marca", selectedMarca, selectedPlatformId],
     queryFn: async () => {
-      if (!selectedMarca || importPlatforms.length === 0) return [];
+      if (!selectedMarca || !selectedPlatformId) return [];
       const { data, error } = await supabase
         .from("fee_rules")
         .select("*, platforms(name)")
         .or(`marca.eq.${selectedMarca},marca.is.null`)
-        .in("platform_id", importPlatforms)
+        .eq("platform_id", selectedPlatformId)
         .order("created_at");
       if (error) throw error;
       return (data || []) as any[];
     },
-    enabled: !!selectedMarca && importPlatforms.length > 0,
+    enabled: !!selectedMarca && !!selectedPlatformId,
   });
 
   // Convert to FeeRule interface
@@ -444,7 +444,7 @@ export function ReconciliationDashboard() {
                       <p className="font-bold text-lg text-destructive">{fmt(totals.extratoTaxas)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1 font-semibold">Líq. Extrato</p>
+                      <p className="text-xs text-muted-foreground mb-1 font-semibold">Conciliar</p>
                       <p className="font-bold text-lg text-green-700">{fmt(totals.totalLiquido + totals.extratoTaxas)}</p>
                     </div>
                   </div>
@@ -549,7 +549,7 @@ export function ReconciliationDashboard() {
                         ))}
                         {hasRules && <TableHead className="text-xs text-right font-bold bg-green-500/10">Conc. Manutenção</TableHead>}
                         {hasBothSources && <TableHead className="text-xs text-right text-destructive font-bold bg-destructive/5">Taxas Extrato</TableHead>}
-                        {hasBothSources && <TableHead className="text-xs text-right font-bold bg-green-500/10">Líq. Extrato</TableHead>}
+                        {hasBothSources && <TableHead className="text-xs text-right font-bold bg-green-500/10">Conciliar</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>

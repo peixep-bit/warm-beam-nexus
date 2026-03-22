@@ -563,10 +563,10 @@ export function ReconciliationDashboard() {
                         );
                         const itemBaseValues: BaseValues = { LiqPDV: liq, ValorItens: valorItensItem, ValorBruto: Number(item.valor_bruto ?? 0) };
                         const { deductions, conciliado } = aplicarRegras(itemBaseValues, activeRules);
-                        // Cross-reference with extrato
+                        // Cross-reference with extrato; fallback to item's own taxas_comissoes
                         const ext = extratoMap.get(String(item.numero_pedido));
-                        const extTaxas = ext ? Number(ext.taxas_comissoes ?? 0) : null;
-                        const extConciliado = extTaxas != null ? liq + extTaxas : null;
+                        const extTaxas = ext ? Number(ext.taxas_comissoes ?? 0) : Number(item.taxas_comissoes ?? 0);
+                        const extConciliado = liq + extTaxas;
                         const rowClass = cancelled ? "opacity-50 line-through bg-destructive/5" : "";
                         return (
                           <TableRow key={item.id} className={rowClass}>

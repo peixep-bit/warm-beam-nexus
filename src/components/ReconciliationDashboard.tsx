@@ -430,26 +430,24 @@ export function ReconciliationDashboard() {
                 </div>
               )}
 
-              {/* Extrato-based conciliation */}
-              {hasBothSources && (
-                <div className="border-t mt-3 pt-3">
-                  <p className="text-xs text-muted-foreground mb-2 font-semibold">📋 Conciliação pelo Extrato</p>
-                  <div className="grid grid-cols-3 gap-3 text-center text-sm">
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Líq. PDV</p>
-                      <p className="font-bold text-lg text-primary">{fmt(totals.totalLiquido)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Taxas Extrato</p>
-                      <p className="font-bold text-lg text-destructive">{fmt(totals.extratoTaxas)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1 font-semibold">Conciliar</p>
-                      <p className="font-bold text-lg text-green-700">{fmt(totals.totalLiquido + totals.extratoTaxas)}</p>
-                    </div>
+              {/* Extrato-based conciliation — always visible */}
+              <div className="border-t mt-3 pt-3">
+                <p className="text-xs text-muted-foreground mb-2 font-semibold">📋 Conciliação pelo Extrato</p>
+                <div className="grid grid-cols-3 gap-3 text-center text-sm">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Líq. PDV</p>
+                    <p className="font-bold text-lg text-primary">{fmt(totals.totalLiquido)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Taxas Extrato</p>
+                    <p className="font-bold text-lg text-destructive">{fmt(totals.extratoTaxasTotal)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1 font-semibold">Conciliar</p>
+                    <p className="font-bold text-lg text-green-700">{fmt(totals.totalLiquido + totals.extratoTaxasTotal)}</p>
                   </div>
                 </div>
-              )}
+              </div>
 
               <p className="text-xs text-muted-foreground text-center mt-3 border-t pt-3">
                 Itens {fmt(totals.valorItens)} + Inc. Loja {fmt(totals.incentivoLoja)} + Com. {fmt(totals.taxasComissoes)} + Entrega {fmt(totals.taxaEntrega)} − Desc. {fmt(totals.desconto)} = <strong className="text-primary">{fmt(totals.totalLiquido)}</strong>

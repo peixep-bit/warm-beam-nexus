@@ -283,6 +283,7 @@ export function ReconciliationDashboard() {
       totalPedidos: sourceItems.length,
       extratoLiquido: sum("valor_liquido", extratoItems),
       extratoTaxas: sum("taxas_comissoes", extratoItems),
+      extratoTaxasTotal: hasBothSources ? sum("taxas_comissoes", extratoItems) : sum("taxas_comissoes", activeItems),
       extratoPedidos: extratoItems.length,
       deductions, conciliado,
     };

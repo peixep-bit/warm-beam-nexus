@@ -587,16 +587,12 @@ export function ReconciliationDashboard() {
                               <TableCell key={idx} className="text-xs text-right text-destructive font-medium">{fmt(d.value)}</TableCell>
                             ))}
                             {hasRules && <TableCell className="text-xs text-right font-bold bg-green-500/10 text-green-700">{fmt(conciliado)}</TableCell>}
-                            {hasBothSources && (
-                              <TableCell className="text-xs text-right text-destructive font-medium bg-destructive/5">
-                                {extTaxas != null ? fmt(extTaxas) : "—"}
-                              </TableCell>
-                            )}
-                            {hasBothSources && (
-                              <TableCell className="text-xs text-right font-bold bg-green-500/10 text-green-700">
-                                {extConciliado != null ? fmt(extConciliado) : "—"}
-                              </TableCell>
-                            )}
+                            <TableCell className="text-xs text-right text-destructive font-medium bg-destructive/5">
+                              {fmt(extTaxas)}
+                            </TableCell>
+                            <TableCell className="text-xs text-right font-bold bg-green-500/10 text-green-700">
+                              {fmt(extConciliado)}
+                            </TableCell>
                           </TableRow>
                         );
                       })}

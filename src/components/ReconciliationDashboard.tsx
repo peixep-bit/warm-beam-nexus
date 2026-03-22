@@ -549,7 +549,7 @@ export function ReconciliationDashboard() {
                         ))}
                         {hasRules && <TableHead className="text-xs text-right font-bold bg-green-500/10">Conc. Manutenção</TableHead>}
                         {hasBothSources && <TableHead className="text-xs text-right text-destructive font-bold bg-destructive/5">Taxas Extrato</TableHead>}
-                        {hasBothSources && <TableHead className="text-xs text-right font-bold bg-green-500/10">Líq. Extrato</TableHead>}
+                        {hasBothSources && <TableHead className="text-xs text-right font-bold bg-green-500/10">Conciliar</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>

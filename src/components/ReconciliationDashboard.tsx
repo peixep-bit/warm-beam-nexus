@@ -285,7 +285,7 @@ export function ReconciliationDashboard() {
       extratoLiquido: sum("valor_liquido", extratoItems),
       extratoTaxas: sum("taxas_comissoes", extratoItems),
       extratoTaxasTotal: hasBothSources ? sum("taxas_comissoes", extratoItems) : sum("taxas_comissoes", activeItems),
-      extratoPedidos: extratoItems.length,
+      conciliarTotal: hasBothSources ? sum("valor_liquido", extratoItems) : sum("valor_liquido", activeItems),
       deductions, conciliado,
     };
   }, [dayItems, pdvItems, extratoItems, activeRules]);

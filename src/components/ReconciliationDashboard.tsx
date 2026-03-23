@@ -25,6 +25,7 @@ export function ReconciliationDashboard() {
   const [selectedMarcaKey, setSelectedMarcaKey] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [searchPedido, setSearchPedido] = useState("");
+  const [expandedPedido, setExpandedPedido] = useState<string | null>(null);
 
   // Derive marca name and platformId from composite key "marca::platformId"
   const selectedMarca = selectedMarcaKey ? selectedMarcaKey.split("::")[0] : "";

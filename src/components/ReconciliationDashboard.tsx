@@ -285,6 +285,7 @@ export function ReconciliationDashboard() {
       extratoLiquido: sum("valor_liquido", extratoItems),
       extratoTaxas: sum("taxas_comissoes", extratoItems),
       extratoTaxasTotal: hasBothSources ? sum("taxas_comissoes", extratoItems) : sum("taxas_comissoes", activeItems),
+      conciliarTotal: hasBothSources ? sum("valor_liquido", extratoItems) : sum("valor_liquido", activeItems),
       extratoPedidos: extratoItems.length,
       deductions, conciliado,
     };
@@ -446,7 +447,7 @@ export function ReconciliationDashboard() {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground mb-1 font-semibold">Conciliar</p>
-                    <p className="font-bold text-lg text-green-700">{fmt(totals.totalLiquido + totals.extratoTaxasTotal)}</p>
+                    <p className="font-bold text-lg text-green-700">{fmt(totals.conciliarTotal)}</p>
                   </div>
                 </div>
               </div>
@@ -565,7 +566,8 @@ export function ReconciliationDashboard() {
                         const { deductions, conciliado } = aplicarRegras(itemBaseValues, activeRules);
                         const ext = extratoMap.get(String(item.numero_pedido));
                         const extTaxas = ext ? Number(ext.taxas_comissoes ?? 0) : Number(item.taxas_comissoes ?? 0);
-                        const extConciliado = liq + extTaxas;
+                        // Conciliar = valor_liquido do extrato iFood (valor real de repasse)
+                        const extConciliado = ext ? Number(ext.valor_liquido ?? 0) : Number(item.valor_liquido ?? 0);
                         const rowClass = cancelled ? "opacity-50 line-through bg-destructive/5" : "cursor-pointer hover:bg-accent/50";
                         const isExpanded = expandedPedido === item.numero_pedido;
 
@@ -697,21 +699,23 @@ export function ReconciliationDashboard() {
                                   )}
 
                                   {/* Extrato conciliation */}
-                                  <div className="rounded border bg-background p-3 space-y-1 font-mono text-xs">
+                                   <div className="rounded border bg-background p-3 space-y-1 font-mono text-xs">
                                     <p className="font-semibold text-sm mb-2 font-sans">Conciliação pelo Extrato:</p>
                                     <div className="grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-0.5 items-center">
-                                      <span></span><span>Líq. PDV</span><span className="text-right font-bold text-primary">{fmt(liq)}</span>
-                                      <span className="text-destructive">+</span><span>Taxas Extrato {ext ? "(do extrato importado)" : "(do próprio item)"}</span><span className="text-right text-destructive">{fmt(extTaxas)}</span>
+                                      <span></span><span>Valor dos Itens</span><span className="text-right font-bold">{fmt(ext ? Number(ext.valor_pdv ?? valorItensItem) : valorItensItem)}</span>
+                                      <span className="text-destructive">+</span><span>Taxas e Comissões (Extrato)</span><span className="text-right text-destructive">{fmt(extTaxas)}</span>
+                                      <span>+</span><span>Incentivo iFood</span><span className="text-right">{fmt(ext ? Number(ext.incentivo_ifood ?? 0) : Number(item.incentivo_ifood ?? 0))}</span>
+                                      <span className="text-destructive">−</span><span>Incentivo Loja</span><span className="text-right text-destructive">{fmt(ext ? Number(ext.incentivo_loja ?? 0) : Number(item.incentivo_loja ?? 0))}</span>
+                                      <span>+</span><span>Taxa Entrega</span><span className="text-right">{fmt(ext ? Number(ext.valor_taxa_entrega ?? 0) : Number(item.valor_taxa_entrega ?? 0))}</span>
+                                      <span>+</span><span>Taxa Serviço</span><span className="text-right">{fmt(ext ? Number(ext.taxa_servico ?? 0) : Number(item.taxa_servico ?? 0))}</span>
                                     </div>
                                     <div className="border-t pt-1 mt-1 flex justify-between font-bold text-green-700">
-                                      <span>= Conciliar</span>
+                                      <span>= Conciliar (Valor Líquido iFood)</span>
                                       <span>{fmt(extConciliado)}</span>
                                     </div>
-                                    {ext && (
-                                      <p className="text-muted-foreground italic mt-1 font-sans">
-                                        Valor Líquido do Extrato iFood: <strong>{fmt(Number(ext.valor_liquido ?? 0))}</strong>
-                                      </p>
-                                    )}
+                                    <p className="text-muted-foreground italic mt-1 font-sans text-[10px]">
+                                      Este é o valor que o iFood informa como repasse líquido do pedido.
+                                    </p>
                                   </div>
                                 </div>
                               </TableCell>

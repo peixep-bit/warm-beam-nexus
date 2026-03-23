@@ -565,7 +565,8 @@ export function ReconciliationDashboard() {
                         const { deductions, conciliado } = aplicarRegras(itemBaseValues, activeRules);
                         const ext = extratoMap.get(String(item.numero_pedido));
                         const extTaxas = ext ? Number(ext.taxas_comissoes ?? 0) : Number(item.taxas_comissoes ?? 0);
-                        const extConciliado = liq + extTaxas;
+                        // Conciliar = valor_liquido do extrato iFood (valor real de repasse)
+                        const extConciliado = ext ? Number(ext.valor_liquido ?? 0) : Number(item.valor_liquido ?? 0);
                         const rowClass = cancelled ? "opacity-50 line-through bg-destructive/5" : "cursor-pointer hover:bg-accent/50";
                         const isExpanded = expandedPedido === item.numero_pedido;
 

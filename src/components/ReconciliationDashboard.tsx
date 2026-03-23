@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +25,7 @@ export function ReconciliationDashboard() {
   const [selectedMarcaKey, setSelectedMarcaKey] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [searchPedido, setSearchPedido] = useState("");
+  const [expandedPedido, setExpandedPedido] = useState<string | null>(null);
 
   // Derive marca name and platformId from composite key "marca::platformId"
   const selectedMarca = selectedMarcaKey ? selectedMarcaKey.split("::")[0] : "";
@@ -555,33 +556,33 @@ export function ReconciliationDashboard() {
                       {displayItems.map((item: any) => {
                         const cancelled = isCancelado(item);
                         const valorItensItem = Number(item.valor_pdv ?? 0);
-                        const liq = calcularTotalLiquidoPDV(
-                          valorItensItem,
-                          Number(item.incentivo_loja ?? 0),
-                          Number(item.taxas_comissoes ?? 0),
-                          Number(item.valor_taxa_entrega ?? 0),
-                          Number(item.desconto ?? 0),
-                        );
+                        const incLoja = Number(item.incentivo_loja ?? 0);
+                        const taxCom = Number(item.taxas_comissoes ?? 0);
+                        const txEntrega = Number(item.valor_taxa_entrega ?? 0);
+                        const desc = Number(item.desconto ?? 0);
+                        const liq = calcularTotalLiquidoPDV(valorItensItem, incLoja, taxCom, txEntrega, desc);
                         const itemBaseValues: BaseValues = { LiqPDV: liq, ValorItens: valorItensItem, ValorBruto: Number(item.valor_bruto ?? 0) };
                         const { deductions, conciliado } = aplicarRegras(itemBaseValues, activeRules);
-                        // Cross-reference with extrato; fallback to item's own taxas_comissoes
                         const ext = extratoMap.get(String(item.numero_pedido));
                         const extTaxas = ext ? Number(ext.taxas_comissoes ?? 0) : Number(item.taxas_comissoes ?? 0);
                         const extConciliado = liq + extTaxas;
-                        const rowClass = cancelled ? "opacity-50 line-through bg-destructive/5" : "";
+                        const rowClass = cancelled ? "opacity-50 line-through bg-destructive/5" : "cursor-pointer hover:bg-accent/50";
+                        const isExpanded = expandedPedido === item.numero_pedido;
+
                         return (
-                          <TableRow key={item.id} className={rowClass}>
+                          <>
+                          <TableRow key={item.id} className={rowClass} onClick={() => setExpandedPedido(isExpanded ? null : item.numero_pedido)}>
                             <TableCell className="text-xs font-mono">
                               <span className="flex items-center gap-1">
-                                {item.numero_pedido || "—"}
+                                {isExpanded ? "▼" : "▶"} {item.numero_pedido || "—"}
                                 {cancelled && <Badge variant="destructive" className="text-[8px] px-1 py-0 no-underline">Cancelado</Badge>}
                               </span>
                             </TableCell>
-                            <TableCell className="text-xs text-right">{fmt(Number(item.valor_pdv ?? 0))}</TableCell>
-                            <TableCell className="text-xs text-right text-destructive">{fmt(Number(item.incentivo_loja ?? 0))}</TableCell>
-                            <TableCell className="text-xs text-right text-destructive">{fmt(Number(item.taxas_comissoes ?? 0))}</TableCell>
-                            <TableCell className="text-xs text-right">{fmt(Number(item.valor_taxa_entrega ?? 0))}</TableCell>
-                            <TableCell className="text-xs text-right text-destructive">-{fmt(Number(item.desconto ?? 0))}</TableCell>
+                            <TableCell className="text-xs text-right">{fmt(valorItensItem)}</TableCell>
+                            <TableCell className="text-xs text-right text-destructive">{fmt(incLoja)}</TableCell>
+                            <TableCell className="text-xs text-right text-destructive">{fmt(taxCom)}</TableCell>
+                            <TableCell className="text-xs text-right">{fmt(txEntrega)}</TableCell>
+                            <TableCell className="text-xs text-right text-destructive">-{fmt(desc)}</TableCell>
                             <TableCell className="text-xs text-right font-bold text-primary bg-primary/5">{fmt(liq)}</TableCell>
                             {deductions.map((d, idx) => (
                               <TableCell key={idx} className="text-xs text-right text-destructive font-medium">{fmt(d.value)}</TableCell>
@@ -594,6 +595,129 @@ export function ReconciliationDashboard() {
                               {fmt(extConciliado)}
                             </TableCell>
                           </TableRow>
+                          {isExpanded && (
+                            <TableRow key={`${item.id}-detail`} className="bg-muted/30">
+                              <TableCell colSpan={7 + activeRules.length + (hasRules ? 1 : 0) + 2} className="p-4">
+                                <div className="space-y-3">
+                                  <p className="text-sm font-semibold flex items-center gap-2">
+                                    <Calculator className="h-4 w-4" />
+                                    Memória de Cálculo — Pedido {item.numero_pedido}
+                                  </p>
+
+                                  {/* All raw fields */}
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                    <div className="rounded border bg-background p-2">
+                                      <span className="text-muted-foreground">Valor dos Itens</span>
+                                      <p className="font-bold">{fmt(valorItensItem)}</p>
+                                    </div>
+                                    <div className="rounded border bg-background p-2">
+                                      <span className="text-muted-foreground">Valor Bruto</span>
+                                      <p className="font-bold">{fmt(Number(item.valor_bruto ?? 0))}</p>
+                                    </div>
+                                    <div className="rounded border bg-background p-2">
+                                      <span className="text-muted-foreground">Incentivo Loja</span>
+                                      <p className="font-bold text-destructive">{fmt(incLoja)}</p>
+                                    </div>
+                                    <div className="rounded border bg-background p-2">
+                                      <span className="text-muted-foreground">Incentivo iFood</span>
+                                      <p className="font-bold">{fmt(Number(item.incentivo_ifood ?? 0))}</p>
+                                    </div>
+                                    <div className="rounded border bg-background p-2">
+                                      <span className="text-muted-foreground">Incentivo Rede</span>
+                                      <p className="font-bold">{fmt(Number(item.incentivo_rede ?? 0))}</p>
+                                    </div>
+                                    <div className="rounded border bg-background p-2">
+                                      <span className="text-muted-foreground">Taxa de Serviço</span>
+                                      <p className="font-bold">{fmt(Number(item.taxa_servico ?? 0))}</p>
+                                    </div>
+                                    <div className="rounded border bg-background p-2">
+                                      <span className="text-muted-foreground">Taxas e Comissões</span>
+                                      <p className="font-bold text-destructive">{fmt(taxCom)}</p>
+                                    </div>
+                                    <div className="rounded border bg-background p-2">
+                                      <span className="text-muted-foreground">Taxa Entrega</span>
+                                      <p className="font-bold">{fmt(txEntrega)}</p>
+                                    </div>
+                                    <div className="rounded border bg-background p-2">
+                                      <span className="text-muted-foreground">Desconto</span>
+                                      <p className="font-bold text-destructive">-{fmt(desc)}</p>
+                                    </div>
+                                    <div className="rounded border bg-background p-2">
+                                      <span className="text-muted-foreground">Valor Líquido (Extrato)</span>
+                                      <p className="font-bold">{fmt(Number(item.valor_liquido ?? 0))}</p>
+                                    </div>
+                                  </div>
+
+                                  {/* Step-by-step formula */}
+                                  <div className="rounded border bg-background p-3 space-y-1 font-mono text-xs">
+                                    <p className="font-semibold text-sm mb-2 font-sans">Fórmula Líq. PDV:</p>
+                                    <div className="grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-0.5 items-center">
+                                      <span></span><span>Valor dos Itens</span><span className="text-right font-bold">{fmt(valorItensItem)}</span>
+                                      <span className="text-destructive">+</span><span>Incentivo Loja</span><span className="text-right text-destructive">{fmt(incLoja)}</span>
+                                      <span className="text-destructive">+</span><span>Taxas e Comissões</span><span className="text-right text-destructive">{fmt(taxCom)}</span>
+                                      <span>+</span><span>Taxa Entrega</span><span className="text-right">{fmt(txEntrega)}</span>
+                                      <span className="text-destructive">−</span><span>Desconto</span><span className="text-right text-destructive">{fmt(desc)}</span>
+                                      {txEntrega > 0 && desc > 0 && (
+                                        <>
+                                          <span></span>
+                                          <span className="text-muted-foreground italic">Entrega líquida: max(0, {fmt(txEntrega)} − {fmt(desc)}) = {fmt(Math.max(0, txEntrega - desc))}</span>
+                                          <span></span>
+                                        </>
+                                      )}
+                                    </div>
+                                    <div className="border-t pt-1 mt-1 flex justify-between font-bold text-primary">
+                                      <span>= Líq. PDV</span>
+                                      <span>{fmt(liq)}</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Fee rules breakdown */}
+                                  {hasRules && (
+                                    <div className="rounded border bg-background p-3 space-y-1 font-mono text-xs">
+                                      <p className="font-semibold text-sm mb-2 font-sans">Regras de Conciliação:</p>
+                                      <div className="grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-0.5 items-center">
+                                        <span></span><span>Líq. PDV</span><span className="text-right font-bold">{fmt(liq)}</span>
+                                        {deductions.map((d, idx) => {
+                                          const rule = activeRules[idx];
+                                          const base = itemBaseValues[rule.base_field] ?? liq;
+                                          return (
+                                            <React.Fragment key={idx}>
+                                              <span className="text-destructive">−</span>
+                                              <span>{d.name} {rule.percentage != null ? `(${Math.abs(rule.percentage)}% de {fmt(base)})` : ""}{rule.fixed_amount != null ? ` + fixo ${fmt(Math.abs(rule.fixed_amount))}` : ""}</span>
+                                              <span className="text-right text-destructive">{fmt(d.value)}</span>
+                                            </React.Fragment>
+                                          );
+                                        })}
+                                      </div>
+                                      <div className="border-t pt-1 mt-1 flex justify-between font-bold text-green-700">
+                                        <span>= Conc. Manutenção</span>
+                                        <span>{fmt(conciliado)}</span>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Extrato conciliation */}
+                                  <div className="rounded border bg-background p-3 space-y-1 font-mono text-xs">
+                                    <p className="font-semibold text-sm mb-2 font-sans">Conciliação pelo Extrato:</p>
+                                    <div className="grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-0.5 items-center">
+                                      <span></span><span>Líq. PDV</span><span className="text-right font-bold text-primary">{fmt(liq)}</span>
+                                      <span className="text-destructive">+</span><span>Taxas Extrato {ext ? "(do extrato importado)" : "(do próprio item)"}</span><span className="text-right text-destructive">{fmt(extTaxas)}</span>
+                                    </div>
+                                    <div className="border-t pt-1 mt-1 flex justify-between font-bold text-green-700">
+                                      <span>= Conciliar</span>
+                                      <span>{fmt(extConciliado)}</span>
+                                    </div>
+                                    {ext && (
+                                      <p className="text-muted-foreground italic mt-1 font-sans">
+                                        Valor Líquido do Extrato iFood: <strong>{fmt(Number(ext.valor_liquido ?? 0))}</strong>
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          </>
                         );
                       })}
                     </TableBody>

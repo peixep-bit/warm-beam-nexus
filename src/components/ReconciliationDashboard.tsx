@@ -12,6 +12,8 @@ import { calcularTotalLiquidoPDV, aplicarRegras, type FeeRule, type BaseValues }
 import { Calculator, Search, Receipt, CheckCircle2, XCircle, ArrowRightLeft, BookOpen } from "lucide-react";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+// Escape special characters for PostgREST filter values to prevent filter injection
+const escapeFilterValue = (v: string) => v.replace(/[(),."\\]/g, (ch) => `\\${ch}`);
 const fmtDate = (d: string) => {
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;

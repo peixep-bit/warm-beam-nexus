@@ -287,7 +287,15 @@ export function ReconciliationDashboard() {
       extratoLiquido: sum("valor_liquido", extratoItems),
       extratoTaxas: sum("taxas_comissoes", extratoItems),
       extratoTaxasTotal: hasBothSources ? sum("taxas_comissoes", extratoItems) : sum("taxas_comissoes", activeItems),
-      conciliarTotal: hasBothSources ? sum("valor_liquido", extratoItems) : sum("valor_liquido", activeItems),
+      conciliarTotal: (() => {
+        const src = hasBothSources ? extratoItems : activeItems;
+        return src.reduce((s: number, i: any) => s + calcularConciliar(
+          Number(i.valor_pdv ?? 0), Number(i.taxas_comissoes ?? 0),
+          Number(i.incentivo_ifood ?? 0), Number(i.incentivo_loja ?? 0),
+          Number(i.incentivo_rede ?? 0), Number(i.taxa_servico ?? 0),
+          Number(i.valor_taxa_entrega ?? 0), Number(i.desconto ?? 0),
+        ), 0);
+      })(),
       extratoPedidos: extratoItems.length,
       deductions, conciliado,
     };

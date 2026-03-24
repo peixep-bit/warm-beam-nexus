@@ -138,7 +138,7 @@ export function ReconciliationDashboard() {
       const { data, error } = await supabase
         .from("statement_items")
         .select("data_transacao")
-        .or(`marca.eq.${selectedMarca},cnpj.eq.${selectedMarca}`);
+        .or(`marca.eq.${escapeFilterValue(selectedMarca)},cnpj.eq.${escapeFilterValue(selectedMarca)}`);
       if (error) throw error;
       const dates = [...new Set((data || []).map((i: any) => String(i.data_transacao)))].sort();
       return dates;

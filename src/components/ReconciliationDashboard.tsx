@@ -730,11 +730,11 @@ export function ReconciliationDashboard() {
                                       <span>+</span><span>Taxa Serviço</span><span className="text-right">{fmt(ext ? Number(ext.taxa_servico ?? 0) : Number(item.taxa_servico ?? 0))}</span>
                                     </div>
                                     <div className="border-t pt-1 mt-1 flex justify-between font-bold text-green-700">
-                                      <span>= Conciliar (Valor Líquido iFood)</span>
+                                      <span>= Conciliar</span>
                                       <span>{fmt(extConciliado)}</span>
                                     </div>
                                     <p className="text-muted-foreground italic mt-1 font-sans text-[10px]">
-                                      Este é o valor que o iFood informa como repasse líquido do pedido.
+                                      Fórmula: Valor Itens + Taxas/Com. + Inc. iFood + Inc. Loja + Inc. Rede + Tx Serviço + Tx Entrega − Desconto
                                     </p>
                                   </div>
                                 </div>

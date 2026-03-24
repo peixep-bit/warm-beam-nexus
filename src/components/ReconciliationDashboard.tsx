@@ -154,7 +154,7 @@ export function ReconciliationDashboard() {
       const { data, error } = await supabase
         .from("statement_items")
         .select("*, statement_imports!inner(platform_id)")
-        .or(`marca.eq.${selectedMarca},cnpj.eq.${selectedMarca}`)
+        .or(`marca.eq.${escapeFilterValue(selectedMarca)},cnpj.eq.${escapeFilterValue(selectedMarca)}`)
         .eq("data_transacao", selectedDate)
         .order("numero_pedido");
       if (error) throw error;

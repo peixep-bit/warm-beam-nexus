@@ -107,7 +107,7 @@ export function ReconciliationDashboard() {
       const { data, error } = await supabase
         .from("fee_rules")
         .select("*, platforms(name)")
-        .or(`marca.eq.${selectedMarca},marca.is.null`)
+        .or(`marca.eq.${escapeFilterValue(selectedMarca)},marca.is.null`)
         .eq("platform_id", selectedPlatformId)
         .order("created_at");
       if (error) throw error;

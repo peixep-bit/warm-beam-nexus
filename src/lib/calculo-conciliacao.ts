@@ -92,6 +92,43 @@ export function aplicarRegras(
   return { deductions, conciliado: Math.round(total * 100) / 100 };
 }
 
+/**
+ * Calcula o valor "Conciliar" — reproduz o Valor Líquido do iFood por fórmula.
+ *
+ * FÓRMULA (todos os campos do extrato):
+ *   Conciliar = Valor Itens + Taxas e Comissões + Incentivo iFood
+ *               + Incentivo Loja + Incentivo Rede + Taxa Serviço
+ *               + Taxa Entrega − Desconto
+ *
+ * Diferença em relação ao Líq. PDV:
+ *   - Inclui Incentivo iFood (subsídio que o iFood cobre)
+ *   - Inclui Incentivo Rede
+ *   - Inclui Taxa de Serviço
+ *   - Não aplica a trava max(0, entrega - desconto) pois o iFood repassa o líquido real
+ */
+export function calcularConciliar(
+  valorItens: number | null | undefined,
+  taxasEComissoes: number | null | undefined,
+  incentivoIfood: number | null | undefined,
+  incentivoLoja: number | null | undefined,
+  incentivoRede: number | null | undefined,
+  taxaServico: number | null | undefined,
+  taxaEntrega: number | null | undefined,
+  desconto: number | null | undefined,
+): number {
+  const itens = valorItens ?? 0;
+  const taxas = taxasEComissoes ?? 0;       // vem negativo
+  const incIfood = incentivoIfood ?? 0;     // positivo (iFood subsidia)
+  const incLoja = incentivoLoja ?? 0;       // vem negativo
+  const incRede = incentivoRede ?? 0;
+  const servico = taxaServico ?? 0;
+  const entrega = taxaEntrega ?? 0;
+  const desc = desconto ?? 0;
+
+  const resultado = itens + taxas + incIfood + incLoja + incRede + servico + entrega - desc;
+  return Math.round(resultado * 100) / 100;
+}
+
 export function calcularTotalDiario(
   items: ItemConciliacao[],
   cnpj: string,

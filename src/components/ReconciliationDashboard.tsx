@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { calcularTotalLiquidoPDV, aplicarRegras, type FeeRule, type BaseValues } from "@/lib/calculo-conciliacao";
+import { calcularTotalLiquidoPDV, calcularConciliar, aplicarRegras, type FeeRule, type BaseValues } from "@/lib/calculo-conciliacao";
 import { Calculator, Search, Receipt, CheckCircle2, XCircle, ArrowRightLeft, BookOpen } from "lucide-react";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -287,7 +287,15 @@ export function ReconciliationDashboard() {
       extratoLiquido: sum("valor_liquido", extratoItems),
       extratoTaxas: sum("taxas_comissoes", extratoItems),
       extratoTaxasTotal: hasBothSources ? sum("taxas_comissoes", extratoItems) : sum("taxas_comissoes", activeItems),
-      conciliarTotal: hasBothSources ? sum("valor_liquido", extratoItems) : sum("valor_liquido", activeItems),
+      conciliarTotal: (() => {
+        const src = hasBothSources ? extratoItems : activeItems;
+        return src.reduce((s: number, i: any) => s + calcularConciliar(
+          Number(i.valor_pdv ?? 0), Number(i.taxas_comissoes ?? 0),
+          Number(i.incentivo_ifood ?? 0), Number(i.incentivo_loja ?? 0),
+          Number(i.incentivo_rede ?? 0), Number(i.taxa_servico ?? 0),
+          Number(i.valor_taxa_entrega ?? 0), Number(i.desconto ?? 0),
+        ), 0);
+      })(),
       extratoPedidos: extratoItems.length,
       deductions, conciliado,
     };
@@ -568,8 +576,18 @@ export function ReconciliationDashboard() {
                         const { deductions, conciliado } = aplicarRegras(itemBaseValues, activeRules);
                         const ext = extratoMap.get(String(item.numero_pedido));
                         const extTaxas = ext ? Number(ext.taxas_comissoes ?? 0) : Number(item.taxas_comissoes ?? 0);
-                        // Conciliar = valor_liquido do extrato iFood (valor real de repasse)
-                        const extConciliado = ext ? Number(ext.valor_liquido ?? 0) : Number(item.valor_liquido ?? 0);
+                        // Conciliar = fórmula completa que reproduz o valor líquido do iFood
+                        const src = ext || item;
+                        const extConciliado = calcularConciliar(
+                          Number(src.valor_pdv ?? 0),
+                          Number(src.taxas_comissoes ?? 0),
+                          Number(src.incentivo_ifood ?? 0),
+                          Number(src.incentivo_loja ?? 0),
+                          Number(src.incentivo_rede ?? 0),
+                          Number(src.taxa_servico ?? 0),
+                          Number(src.valor_taxa_entrega ?? 0),
+                          Number(src.desconto ?? 0),
+                        );
                         const rowClass = cancelled ? "opacity-50 line-through bg-destructive/5" : "cursor-pointer hover:bg-accent/50";
                         const isExpanded = expandedPedido === item.numero_pedido;
 
@@ -712,11 +730,11 @@ export function ReconciliationDashboard() {
                                       <span>+</span><span>Taxa Serviço</span><span className="text-right">{fmt(ext ? Number(ext.taxa_servico ?? 0) : Number(item.taxa_servico ?? 0))}</span>
                                     </div>
                                     <div className="border-t pt-1 mt-1 flex justify-between font-bold text-green-700">
-                                      <span>= Conciliar (Valor Líquido iFood)</span>
+                                      <span>= Conciliar</span>
                                       <span>{fmt(extConciliado)}</span>
                                     </div>
                                     <p className="text-muted-foreground italic mt-1 font-sans text-[10px]">
-                                      Este é o valor que o iFood informa como repasse líquido do pedido.
+                                      Fórmula: Valor Itens + Taxas/Com. + Inc. iFood + Inc. Loja + Inc. Rede + Tx Serviço + Tx Entrega − Desconto
                                     </p>
                                   </div>
                                 </div>

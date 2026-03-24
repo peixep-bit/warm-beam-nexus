@@ -12,6 +12,8 @@ import { calcularTotalLiquidoPDV, aplicarRegras, type FeeRule, type BaseValues }
 import { Calculator, Search, Receipt, CheckCircle2, XCircle, ArrowRightLeft, BookOpen } from "lucide-react";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+// Escape special characters for PostgREST filter values to prevent filter injection
+const escapeFilterValue = (v: string) => v.replace(/[(),."\\]/g, (ch) => `\\${ch}`);
 const fmtDate = (d: string) => {
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
@@ -82,7 +84,7 @@ export function ReconciliationDashboard() {
       const { data: items, error: itemsErr } = await supabase
         .from("statement_items")
         .select("import_id")
-        .or(`marca.eq.${selectedMarca},cnpj.eq.${selectedMarca},loja.eq.${selectedMarca}`);
+        .or(`marca.eq.${escapeFilterValue(selectedMarca)},cnpj.eq.${escapeFilterValue(selectedMarca)},loja.eq.${escapeFilterValue(selectedMarca)}`);
       if (itemsErr) throw itemsErr;
       const importIds = [...new Set((items || []).map((i: any) => i.import_id))];
       if (importIds.length === 0) return [];
@@ -105,7 +107,7 @@ export function ReconciliationDashboard() {
       const { data, error } = await supabase
         .from("fee_rules")
         .select("*, platforms(name)")
-        .or(`marca.eq.${selectedMarca},marca.is.null`)
+        .or(`marca.eq.${escapeFilterValue(selectedMarca)},marca.is.null`)
         .eq("platform_id", selectedPlatformId)
         .order("created_at");
       if (error) throw error;
@@ -136,7 +138,7 @@ export function ReconciliationDashboard() {
       const { data, error } = await supabase
         .from("statement_items")
         .select("data_transacao")
-        .or(`marca.eq.${selectedMarca},cnpj.eq.${selectedMarca}`);
+        .or(`marca.eq.${escapeFilterValue(selectedMarca)},cnpj.eq.${escapeFilterValue(selectedMarca)}`);
       if (error) throw error;
       const dates = [...new Set((data || []).map((i: any) => String(i.data_transacao)))].sort();
       return dates;
@@ -152,7 +154,7 @@ export function ReconciliationDashboard() {
       const { data, error } = await supabase
         .from("statement_items")
         .select("*, statement_imports!inner(platform_id)")
-        .or(`marca.eq.${selectedMarca},cnpj.eq.${selectedMarca}`)
+        .or(`marca.eq.${escapeFilterValue(selectedMarca)},cnpj.eq.${escapeFilterValue(selectedMarca)}`)
         .eq("data_transacao", selectedDate)
         .order("numero_pedido");
       if (error) throw error;

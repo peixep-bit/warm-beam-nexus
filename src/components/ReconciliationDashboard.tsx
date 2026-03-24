@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { calcularTotalLiquidoPDV, aplicarRegras, type FeeRule, type BaseValues } from "@/lib/calculo-conciliacao";
+import { calcularTotalLiquidoPDV, calcularConciliar, aplicarRegras, type FeeRule, type BaseValues } from "@/lib/calculo-conciliacao";
 import { Calculator, Search, Receipt, CheckCircle2, XCircle, ArrowRightLeft, BookOpen } from "lucide-react";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });

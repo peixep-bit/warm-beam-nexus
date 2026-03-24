@@ -84,7 +84,7 @@ export function ReconciliationDashboard() {
       const { data: items, error: itemsErr } = await supabase
         .from("statement_items")
         .select("import_id")
-        .or(`marca.eq.${selectedMarca},cnpj.eq.${selectedMarca},loja.eq.${selectedMarca}`);
+        .or(`marca.eq.${escapeFilterValue(selectedMarca)},cnpj.eq.${escapeFilterValue(selectedMarca)},loja.eq.${escapeFilterValue(selectedMarca)}`);
       if (itemsErr) throw itemsErr;
       const importIds = [...new Set((items || []).map((i: any) => i.import_id))];
       if (importIds.length === 0) return [];

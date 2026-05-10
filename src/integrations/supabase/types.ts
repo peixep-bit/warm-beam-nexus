@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      contestacoes: {
+        Row: {
+          anexo_url: string | null
+          created_at: string
+          data_abertura: string
+          data_resolucao: string | null
+          id: string
+          observacao: string | null
+          statement_item_id: string
+          status: string
+          tipo: string
+          updated_at: string
+          user_id: string
+          valor_contestado: number
+          valor_recuperado: number
+        }
+        Insert: {
+          anexo_url?: string | null
+          created_at?: string
+          data_abertura?: string
+          data_resolucao?: string | null
+          id?: string
+          observacao?: string | null
+          statement_item_id: string
+          status?: string
+          tipo: string
+          updated_at?: string
+          user_id: string
+          valor_contestado?: number
+          valor_recuperado?: number
+        }
+        Update: {
+          anexo_url?: string | null
+          created_at?: string
+          data_abertura?: string
+          data_resolucao?: string | null
+          id?: string
+          observacao?: string | null
+          statement_item_id?: string
+          status?: string
+          tipo?: string
+          updated_at?: string
+          user_id?: string
+          valor_contestado?: number
+          valor_recuperado?: number
+        }
+        Relationships: []
+      }
       fee_rules: {
         Row: {
           base_field: string
@@ -160,6 +208,8 @@ export type Database = {
           data_transacao: string
           desconto: number | null
           descricao: string | null
+          divergencia_tipo: string
+          divergencia_valor: number
           forma_pagamento: string | null
           id: string
           import_id: string
@@ -169,12 +219,16 @@ export type Database = {
           loja: string | null
           marca: string | null
           numero_pedido: string | null
+          order_status: string
           quantidade_pedidos: number | null
           source_type: string
           status: string | null
           taxa: number | null
           taxa_servico: number | null
           taxas_comissoes: number | null
+          tratativa_atualizada_em: string | null
+          tratativa_observacao: string | null
+          tratativa_status: string
           user_id: string
           valor_bruto: number
           valor_liquido: number
@@ -188,6 +242,8 @@ export type Database = {
           data_transacao: string
           desconto?: number | null
           descricao?: string | null
+          divergencia_tipo?: string
+          divergencia_valor?: number
           forma_pagamento?: string | null
           id?: string
           import_id: string
@@ -197,12 +253,16 @@ export type Database = {
           loja?: string | null
           marca?: string | null
           numero_pedido?: string | null
+          order_status?: string
           quantidade_pedidos?: number | null
           source_type?: string
           status?: string | null
           taxa?: number | null
           taxa_servico?: number | null
           taxas_comissoes?: number | null
+          tratativa_atualizada_em?: string | null
+          tratativa_observacao?: string | null
+          tratativa_status?: string
           user_id: string
           valor_bruto?: number
           valor_liquido?: number
@@ -216,6 +276,8 @@ export type Database = {
           data_transacao?: string
           desconto?: number | null
           descricao?: string | null
+          divergencia_tipo?: string
+          divergencia_valor?: number
           forma_pagamento?: string | null
           id?: string
           import_id?: string
@@ -225,12 +287,16 @@ export type Database = {
           loja?: string | null
           marca?: string | null
           numero_pedido?: string | null
+          order_status?: string
           quantidade_pedidos?: number | null
           source_type?: string
           status?: string | null
           taxa?: number | null
           taxa_servico?: number | null
           taxas_comissoes?: number | null
+          tratativa_atualizada_em?: string | null
+          tratativa_observacao?: string | null
+          tratativa_status?: string
           user_id?: string
           valor_bruto?: number
           valor_liquido?: number

@@ -8,6 +8,7 @@ import { PlatformManager } from "@/components/PlatformManager";
 import { FeeRulesManager } from "@/components/FeeRulesManager";
 import { ReconciliationDashboard } from "@/components/ReconciliationDashboard";
 import { DivergenciasDashboard } from "@/components/DivergenciasDashboard";
+import { FluxoCaixaDashboard } from "@/components/FluxoCaixaDashboard";
 import { Utensils, LogOut } from "lucide-react";
 
 export default function Index() {
@@ -49,6 +50,7 @@ export default function Index() {
           <TabsList className="h-9 flex-wrap">
             <TabsTrigger value="conciliacao" className="text-xs">Conciliação</TabsTrigger>
             <TabsTrigger value="divergencias" className="text-xs">Divergências</TabsTrigger>
+            <TabsTrigger value="fluxo_caixa" className="text-xs">Fluxo de Caixa</TabsTrigger>
             <TabsTrigger value="import" className="text-xs">Importar</TabsTrigger>
             <TabsTrigger value="history" className="text-xs">Histórico</TabsTrigger>
             <TabsTrigger value="platforms" className="text-xs">Plataformas</TabsTrigger>
@@ -60,6 +62,9 @@ export default function Index() {
           </TabsContent>
           <TabsContent value="divergencias">
             <DivergenciasDashboard />
+          </TabsContent>
+          <TabsContent value="fluxo_caixa">
+            <FluxoCaixaDashboard />
           </TabsContent>
           <TabsContent value="import">
             <StatementImport />

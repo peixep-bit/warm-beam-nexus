@@ -25,6 +25,7 @@ export interface ParsedRow {
   taxa_servico: number;
   taxas_comissoes: number;
   valor_liquido_conciliado: number;
+  data_prevista_repasse?: string;
 }
 
 function parseNumber(value: string | number | undefined | null): number {
@@ -115,6 +116,7 @@ function rowFromRecord(row: Record<string, string | number>): ParsedRow {
       taxa_servico: 0,
       taxas_comissoes: 0,
       valor_liquido_conciliado: valorLiquidoConciliado,
+      data_prevista_repasse: get("data_prevista_de_repasse", "data_prevista_repasse", "data_pagamento") ? parseDate(get("data_prevista_de_repasse", "data_prevista_repasse", "data_pagamento")) : undefined,
       // Extra fields stored via the marca column in the file
       marca: String(get("marca") || ""),
       parceiro: String(get("parceiro") || ""),
@@ -189,6 +191,7 @@ function rowFromRecord(row: Record<string, string | number>): ParsedRow {
     taxa_servico: taxaServico,
     taxas_comissoes: taxasComissoes,
     valor_liquido_conciliado: valorLiquidoConciliado,
+    data_prevista_repasse: get("data_prevista_de_repasse__r__", "data_prevista_de_repasse", "data_prevista_repasse", "previsao_pagamento", "data_pagamento") ? parseDate(get("data_prevista_de_repasse__r__", "data_prevista_de_repasse", "data_prevista_repasse", "previsao_pagamento", "data_pagamento")) : undefined,
   };
 }
 

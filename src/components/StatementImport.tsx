@@ -189,6 +189,7 @@ export function StatementImport() {
           taxa_servico: r.taxa_servico,
           taxas_comissoes: r.taxas_comissoes,
           valor_liquido_conciliado: r.valor_liquido_conciliado,
+          data_prevista_repasse: r.data_prevista_repasse || null,
           marca: r.marca || effectiveMarca,
           source_type: sourceType,
         }));

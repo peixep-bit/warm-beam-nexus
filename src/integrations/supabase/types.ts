@@ -205,6 +205,7 @@ export type Database = {
         Row: {
           cnpj: string | null
           created_at: string
+          data_prevista_repasse: string | null
           data_transacao: string
           desconto: number | null
           descricao: string | null
@@ -239,6 +240,7 @@ export type Database = {
         Insert: {
           cnpj?: string | null
           created_at?: string
+          data_prevista_repasse?: string | null
           data_transacao: string
           desconto?: number | null
           descricao?: string | null
@@ -273,6 +275,7 @@ export type Database = {
         Update: {
           cnpj?: string | null
           created_at?: string
+          data_prevista_repasse?: string | null
           data_transacao?: string
           desconto?: number | null
           descricao?: string | null

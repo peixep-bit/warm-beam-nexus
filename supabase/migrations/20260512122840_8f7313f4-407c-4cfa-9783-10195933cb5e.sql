@@ -1,0 +1,2 @@
+ALTER TABLE public.statement_items ADD COLUMN data_prevista_repasse date;
+CREATE INDEX idx_statement_items_data_prevista_repasse ON public.statement_items(data_prevista_repasse);

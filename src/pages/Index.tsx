@@ -24,7 +24,8 @@ export default function Index() {
     );
   }
 
-  if (!user) return <Navigate to="/auth" replace />;
+  // Login temporariamente desativado para acesso externo (Claude AI)
+  // if (!user) return <Navigate to="/auth" replace />;
 
   return (
     <div className="min-h-screen bg-background">

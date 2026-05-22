@@ -10,30 +10,22 @@ import { DivergenciasDashboard } from "@/components/DivergenciasDashboard";
 import { FluxoCaixaDashboard } from "@/components/FluxoCaixaDashboard";
 import { IFoodImport } from "@/components/IFoodImport";
 import { IFoodFechamento } from "@/components/IFoodFechamento";
+import { NavigationProvider, useNavigation } from "@/hooks/useNavigation";
 import { Utensils, LogOut } from "lucide-react";
 import { useState } from "react";
 
-export default function Index() {
-  const { user, loading, signOut } = useAuth();
+// Inner component — tem acesso ao NavigationContext
+function AppContent() {
+  const { user, signOut } = useAuth();
+  const { activeTab, filter, navigateTo, clearFilter } = useNavigation();
 
-  // Período padrão: últimos 7 dias
   const today = new Date().toISOString().split("T")[0];
   const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
   const [fechamentoPeriodo] = useState({ start: sevenDaysAgo, end: today });
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <div className="rounded-xl border border-border bg-card px-6 py-4 text-sm text-muted-foreground shadow-sm">
-          Carregando...
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* Header sticky */}
       <header className="border-b bg-card sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -54,9 +46,11 @@ export default function Index() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-4">
-        <Tabs defaultValue="conciliacao" className="space-y-4">
-
-          {/* Ordem das abas: fluxo operacional diário */}
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => { navigateTo(v); clearFilter(); }}
+          className="space-y-4"
+        >
           <TabsList className="h-9 flex-wrap gap-0.5">
             <TabsTrigger value="conciliacao"  className="text-xs">📊 Conciliação</TabsTrigger>
             <TabsTrigger value="import"       className="text-xs">📥 Importar</TabsTrigger>
@@ -68,12 +62,10 @@ export default function Index() {
             <TabsTrigger value="rules"        className="text-xs">⚙️ Taxas</TabsTrigger>
           </TabsList>
 
-          {/* 1. CONCILIAÇÃO — tela principal de consulta diária */}
           <TabsContent value="conciliacao">
             <ReconciliationDashboard />
           </TabsContent>
 
-          {/* 2. IMPORTAR — iFood dedicado + outros extratos */}
           <TabsContent value="import">
             <Tabs defaultValue="ifood" className="space-y-3">
               <TabsList className="h-8">
@@ -81,7 +73,8 @@ export default function Index() {
                 <TabsTrigger value="outros" className="text-xs">📄 Outros extratos</TabsTrigger>
               </TabsList>
               <TabsContent value="ifood">
-                <IFoodImport />
+                {/* Passa o callback de navegação para o IFoodImport */}
+                <IFoodImport onVerDivergencias={(f) => navigateTo("divergencias", f)} />
               </TabsContent>
               <TabsContent value="outros">
                 <StatementImport />
@@ -89,7 +82,6 @@ export default function Index() {
             </Tabs>
           </TabsContent>
 
-          {/* 3. FECHAMENTO — lançamento Everest, créditos/débitos por período */}
           <TabsContent value="fechamento">
             <IFoodFechamento
               periodoStart={fechamentoPeriodo.start}
@@ -97,33 +89,49 @@ export default function Index() {
             />
           </TabsContent>
 
-          {/* 4. DIVERGÊNCIAS — tratativas, valor p/ ajustar no Everest */}
+          {/* Divergências recebe o filtro vindo do import */}
           <TabsContent value="divergencias">
-            <DivergenciasDashboard />
+            <DivergenciasDashboard filtroExterno={filter} onClearFiltro={clearFilter} />
           </TabsContent>
 
-          {/* 5. FLUXO DE CAIXA — agenda de repasses futuros */}
           <TabsContent value="fluxo_caixa">
             <FluxoCaixaDashboard />
           </TabsContent>
 
-          {/* 6. HISTÓRICO — lista de imports com delete */}
           <TabsContent value="history">
             <ImportsList />
           </TabsContent>
 
-          {/* 7. PLATAFORMAS — cadastro iFood, 99Food, etc. */}
           <TabsContent value="platforms">
             <PlatformManager />
           </TabsContent>
 
-          {/* 8. TAXAS — regras de comissão por marca/plataforma */}
           <TabsContent value="rules">
             <FeeRulesManager />
           </TabsContent>
-
         </Tabs>
       </main>
     </div>
+  );
+}
+
+// Wrapper com o Provider
+export default function Index() {
+  const { loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="rounded-xl border bg-card px-6 py-4 text-sm text-muted-foreground shadow-sm">
+          Carregando...
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <NavigationProvider>
+      <AppContent />
+    </NavigationProvider>
   );
 }

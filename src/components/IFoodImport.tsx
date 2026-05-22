@@ -9,6 +9,7 @@ import { useState, useCallback, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { NavigationFilter } from "@/hooks/useNavigation";
 import { useToast } from "@/hooks/use-toast";
 import {
   parseIFoodExtrato,
@@ -83,7 +84,7 @@ function FileDropZone({
 
 type Step = "upload" | "processando" | "preview" | "salvando" | "concluido";
 
-export function IFoodImport() {
+export function IFoodImport({ onVerDivergencias }: { onVerDivergencias?: (f: NavigationFilter) => void }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -376,10 +377,24 @@ export function IFoodImport() {
               </Button>
               {resumo.divergentes > 0 && (
                 <Button variant="default" onClick={() => {
-                  // Navega para aba de divergências
-                  document.querySelector<HTMLElement>('[value="divergencias"]')?.click();
+                  // Monta filtro com o período dos arquivos importados
+                  const datas = items
+                    .filter(i => i.data_transacao)
+                    .map(i => i.data_transacao)
+                    .sort();
+                  const filtro: NavigationFilter = {
+                    data_inicio: datas[0],
+                    data_fim: datas[datas.length - 1],
+                    status: "nao_tratado",
+                  };
+                  if (onVerDivergencias) {
+                    onVerDivergencias(filtro);
+                  } else {
+                    // Fallback: DOM click (compatibilidade)
+                    document.querySelector<HTMLElement>('[value="divergencias"]')?.click();
+                  }
                 }}>
-                  <AlertTriangle className="h-4 w-4 mr-2" />Ver divergências
+                  <AlertTriangle className="h-4 w-4 mr-2" />Ver {resumo.divergentes} divergências
                 </Button>
               )}
             </div>

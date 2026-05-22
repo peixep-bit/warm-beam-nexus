@@ -39,14 +39,32 @@ import type { FeeRule } from "@/lib/calculo-conciliacao";
 const fmt = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-export function DivergenciasDashboard() {
+export function DivergenciasDashboard({
+  filtroExterno = {},
+  onClearFiltro,
+}: {
+  filtroExterno?: { marca?: string; data_inicio?: string; data_fim?: string; status?: string; tipo?: string };
+  onClearFiltro?: () => void;
+}) {
   const queryClient = useQueryClient();
   const [filtroTipo, setFiltroTipo] = useState<DivergenciaTipo | "todos">("todos");
   const [filtroStatus, setFiltroStatus] = useState<TratativaStatus | "todos">("todos");
   const [filtroMarca, setFiltroMarca] = useState<string>("todos");
+  const [filtroDataInicio, setFiltroDataInicio] = useState<string>("");
+  const [filtroDataFim, setFiltroDataFim] = useState<string>("");
   const [busca, setBusca] = useState("");
   const [reclassificando, setReclassificando] = useState(false);
   const [tratandoId, setTratandoId] = useState<string | null>(null);
+
+  // Aplicar filtro externo quando chegar (vindo do IFoodImport)
+  useEffect(() => {
+    if (filtroExterno.marca) setFiltroMarca(filtroExterno.marca);
+    if (filtroExterno.status) setFiltroStatus(filtroExterno.status as TratativaStatus);
+    if (filtroExterno.tipo) setFiltroTipo(filtroExterno.tipo as DivergenciaTipo);
+    if (filtroExterno.data_inicio) setFiltroDataInicio(filtroExterno.data_inicio);
+    if (filtroExterno.data_fim) setFiltroDataFim(filtroExterno.data_fim);
+  }, [filtroExterno]);
+
 
   // Carrega pedidos (limite 1000 conforme regra do projeto)
   const { data: pedidos = [], isLoading } = useQuery({
@@ -136,6 +154,8 @@ export function DivergenciasDashboard() {
       const ts = p.tratativa_status ?? "nao_tratado";
       if (filtroStatus !== "todos" && ts !== filtroStatus) return false;
       if (filtroMarca !== "todos" && p.marca !== filtroMarca) return false;
+      if (filtroDataInicio && p.data_transacao < filtroDataInicio) return false;
+      if (filtroDataFim && p.data_transacao > filtroDataFim) return false;
       if (busca) {
         const q = busca.toLowerCase();
         const hit =
@@ -146,7 +166,7 @@ export function DivergenciasDashboard() {
       }
       return true;
     });
-  }, [pedidos, filtroTipo, filtroStatus, filtroMarca, busca]);
+  }, [pedidos, filtroTipo, filtroStatus, filtroMarca, filtroDataInicio, filtroDataFim, busca]);
 
   // KPIs
   const kpis = useMemo(() => {
@@ -191,9 +211,34 @@ export function DivergenciasDashboard() {
   }
 
   const tratando = tratandoId ? (pedidos as any[]).find((p) => p.id === tratandoId) : null;
+  const temFiltroExterno = filtroDataInicio || filtroDataFim || (filtroMarca !== "todos");
 
   return (
     <div className="space-y-4">
+      {/* Banner de filtro ativo vindo do import */}
+      {temFiltroExterno && (
+        <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 text-sm text-amber-800">
+          <span>
+            🔍 Mostrando divergências do import
+            {filtroDataInicio && <> · <strong>{filtroDataInicio}</strong></>}
+            {filtroDataFim && filtroDataFim !== filtroDataInicio && <> a <strong>{filtroDataFim}</strong></>}
+            {filtroMarca !== "todos" && <> · <strong>{filtroMarca}</strong></>}
+          </span>
+          <button
+            onClick={() => {
+              setFiltroDataInicio("");
+              setFiltroDataFim("");
+              setFiltroMarca("todos");
+              setFiltroStatus("todos");
+              if (onClearFiltro) onClearFiltro();
+            }}
+            className="text-xs underline ml-4 hover:text-amber-900"
+          >
+            Limpar filtro
+          </button>
+        </div>
+      )}
+
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard

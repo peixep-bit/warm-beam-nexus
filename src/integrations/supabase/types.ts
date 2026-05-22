@@ -147,6 +147,7 @@ export type Database = {
           period_end: string | null
           period_start: string | null
           platform_id: string
+          platform_slug: string | null
           source_type: string
           status: string
           total_bruto: number | null
@@ -165,6 +166,7 @@ export type Database = {
           period_end?: string | null
           period_start?: string | null
           platform_id: string
+          platform_slug?: string | null
           source_type?: string
           status?: string
           total_bruto?: number | null
@@ -183,6 +185,7 @@ export type Database = {
           period_end?: string | null
           period_start?: string | null
           platform_id?: string
+          platform_slug?: string | null
           source_type?: string
           status?: string
           total_bruto?: number | null

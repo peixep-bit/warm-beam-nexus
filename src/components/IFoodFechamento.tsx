@@ -98,7 +98,8 @@ function CopyButton({ value }: { value: number }) {
 
 // ─── DiaRow expansível ────────────────────────────────────────
 
-function DiaRow({ dia }: { dia: ReturnType<typeof useFechamentoData>["data"] extends { dias: infer D } ? D[number] : never }) {
+type FechamentoDia = NonNullable<ReturnType<typeof useFechamentoData>["data"]>["dias"][number];
+function DiaRow({ dia }: { dia: FechamentoDia }) {
   const [open, setOpen] = useState(false);
   const taxa = dia.bruto > 0 ? ((1 - dia.liquido / dia.bruto) * 100).toFixed(1) : "—";
 

@@ -15,6 +15,8 @@ import {
   Info, Loader2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -153,17 +155,16 @@ interface Props {
   periodoEnd?: string;
 }
 
-export function IFoodFechamento({ periodoStart = "", periodoEnd = "" }: Props) {
+export function IFoodFechamento({ periodoStart: initStart = "", periodoEnd: initEnd = "" }: Props) {
   const [tab, setTab] = useState<Tab>("periodo");
-  const { data, isLoading } = useFechamentoData(periodoStart, periodoEnd);
 
-  if (!periodoStart) {
-    return (
-      <Card><CardContent className="pt-6 text-center text-sm text-muted-foreground py-12">
-        Selecione um período para ver o fechamento.
-      </CardContent></Card>
-    );
-  }
+  // Período controlado localmente — usuário pode ajustar
+  const today = new Date().toISOString().split("T")[0];
+  const defaultStart = initStart || new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
+  const [periodoStart, setPeriodoStart] = useState(defaultStart);
+  const [periodoEnd, setPeriodoEnd] = useState(initEnd || today);
+
+  const { data, isLoading } = useFechamentoData(periodoStart, periodoEnd);
 
   if (isLoading) {
     return (
@@ -199,7 +200,6 @@ export function IFoodFechamento({ periodoStart = "", periodoEnd = "" }: Props) {
           <p className="text-xs text-muted-foreground">{periodoStart} a {periodoEnd} · iFood</p>
           <h2 className="text-lg font-semibold">Fechamento do período</h2>
         </div>
-        <div className="flex gap-2">
           <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
             <CheckCircle2 className="h-3 w-3 mr-1" />{totPedidos} pedidos
           </Badge>

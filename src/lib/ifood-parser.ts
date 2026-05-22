@@ -76,9 +76,15 @@ export interface ReconciliacaoItem {
   valor_itens_ifood: number;
   total_faturado_pdv: number;
   valor_liquido_ifood: number;
-  // A divergência real para lançar no Everest:
-  // diferença entre o que PDV esperava e o que iFood repassou
+  // Comissão iFood = total_faturado_pdv - valor_liquido_ifood (sempre positivo, é o custo)
   divergencia_repasse: number;
+  // Campos financeiros discriminados — para Conciliação e Fechamento
+  taxas_comissoes?: number;    // já negativo
+  incentivo_ifood?: number;
+  incentivo_loja?: number;
+  incentivo_rede?: number;
+  taxa_servico?: number;
+  taxa_entrega?: number;       // retida pelo iFood
   // Metadados
   loja: string;
   data_transacao: string;
@@ -314,6 +320,13 @@ export function reconciliar(
         total_faturado_pdv: p.total_faturado,
         valor_liquido_ifood: e.valor_liquido,
         divergencia_repasse,
+        // Campos financeiros do extrato iFood
+        taxas_comissoes: e.taxas_comissoes,
+        incentivo_ifood: e.incentivo_ifood,
+        incentivo_loja: e.incentivo_loja,
+        incentivo_rede: e.incentivo_rede,
+        taxa_servico: e.taxa_servico,
+        taxa_entrega: e.taxa_entrega,
         loja: p.loja || e.loja,
         data_transacao: e.data_transacao,
         forma_pagamento: e.forma_pagamento || p.forma_pagamento,

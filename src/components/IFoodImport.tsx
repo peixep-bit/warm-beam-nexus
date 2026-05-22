@@ -113,6 +113,10 @@ export function IFoodImport({ onVerDivergencias }: { onVerDivergencias?: (f: Nav
   );
 
   // Processar arquivos
+  // Extraído dos arquivos para usar no insert
+  const [marcaDetectada, setMarcaDetectada] = useState("");
+  const [lojaDetectada, setLojaDetectada] = useState("");
+
   const processar = useCallback(async () => {
     if (!fileExtrato && !filePDV) { setErro("Envie pelo menos um arquivo."); return; }
     setErro(null);
@@ -122,6 +126,11 @@ export function IFoodImport({ onVerDivergencias }: { onVerDivergencias?: (f: Nav
         fileExtrato ? parseIFoodExtrato(fileExtrato) : Promise.resolve([]),
         filePDV ? parseIFoodPDV(filePDV) : Promise.resolve([]),
       ]);
+      // Extrair marca e loja dos arquivos para usar no insert
+      const marca = pdv.find(p => p.marca)?.marca || extrato.find(e => e.loja)?.loja || "";
+      const loja = pdv.find(p => p.loja)?.loja || extrato.find(e => e.loja)?.loja || "";
+      setMarcaDetectada(marca);
+      setLojaDetectada(loja);
       const resultado = reconciliar(extrato, pdv);
       setItems(resultado);
       setResumo(calcularResumo(resultado));
@@ -142,7 +151,7 @@ export function IFoodImport({ onVerDivergencias }: { onVerDivergencias?: (f: Nav
       const extrato = items.filter((i) => i.status !== "sob_demanda" && i.valor_itens_ifood > 0);
       const datas = extrato.map((i) => i.data_transacao).sort();
 
-      // Criar import
+      // Criar import com marca e loja detectadas
       const { data: imp, error: impErr } = await supabase
         .from("statement_imports")
         .insert({
@@ -152,31 +161,42 @@ export function IFoodImport({ onVerDivergencias }: { onVerDivergencias?: (f: Nav
           period_start: datas[0] ?? null,
           period_end: datas[datas.length - 1] ?? null,
           total_bruto: resumo?.total_bruto_ifood ?? 0,
-          total_taxas: 0,
+          total_taxas: resumo ? -(resumo.total_bruto_ifood - resumo.total_liquido_ifood) : 0,
           total_descontos: 0,
           total_repasse: resumo?.total_liquido_ifood ?? 0,
           status: "processado",
           source_type: "extrato",
+          marca: marcaDetectada || null,
+          loja: lojaDetectada || null,
         })
         .select()
         .single();
       if (impErr) throw impErr;
 
-      // Inserir itens em lotes de 500
+      // Inserir itens em lotes de 500 — com todos os campos financeiros
       const rows = items.map((i) => ({
         import_id: imp.id,
         user_id: user.id,
         data_transacao: i.data_transacao || new Date().toISOString().split("T")[0],
-        loja: i.loja,
-        descricao: i.status,
-        valor_pdv: i.valor_itens_ifood,
+        loja: i.loja || lojaDetectada,
+        marca: marcaDetectada || null,
+        descricao: i.forma_pagamento || i.status,
+        valor_pdv: i.valor_itens_ifood,              // VALOR DOS ITENS — base do cruzamento
         valor_bruto: i.valor_itens_ifood,
-        valor_liquido: i.valor_liquido_ifood,
-        numero_pedido: i.id_curto,
-        forma_pagamento: i.forma_pagamento,
+        valor_liquido: i.valor_liquido_ifood,         // REPASSE REAL do iFood
+        // Campos financeiros discriminados (para Conciliação e Fechamento)
+        taxas_comissoes: i.taxas_comissoes ?? 0,
+        incentivo_ifood: i.incentivo_ifood ?? 0,
+        incentivo_loja: i.incentivo_loja ?? 0,
+        incentivo_rede: i.incentivo_rede ?? 0,
+        taxa_servico: i.taxa_servico ?? 0,
+        valor_taxa_entrega: i.taxa_entrega ?? 0,
+        // Divergência = comissão iFood (diferença esperada, não é erro)
         divergencia_valor: Math.abs(i.divergencia_repasse),
         divergencia_tipo: i.status === "conciliado" ? "nenhuma" : i.status,
-        tratativa_status: "nao_tratado",
+        tratativa_status: ["divergente_status", "nao_encontrado_pdv", "nao_encontrado_extrato"].includes(i.status) ? "nao_tratado" : "nao_tratado",
+        numero_pedido: i.id_curto,
+        forma_pagamento: i.forma_pagamento,
         source_type: "extrato",
         order_status: i.status === "cancelado" ? "cancelado" : "entregue",
       }));

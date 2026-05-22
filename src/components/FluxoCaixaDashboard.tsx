@@ -86,6 +86,17 @@ export function FluxoCaixaDashboard() {
 
   if (isLoading) return <div className="p-4 text-sm text-muted-foreground">Carregando fluxo de caixa...</div>;
 
+  if (items.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground space-y-2">
+        <DollarSign className="h-10 w-10 mx-auto opacity-30" />
+        <p className="font-medium">Sem dados de agenda de repasse</p>
+        <p className="text-sm">O Fluxo de Caixa usa o campo <strong>data_prevista_repasse</strong> dos pedidos.<br/>
+        Importe extratos que contenham essa informação, ou preencha manualmente via Histórico.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-card p-4 rounded-lg border">

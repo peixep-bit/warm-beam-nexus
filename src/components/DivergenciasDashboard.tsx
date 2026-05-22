@@ -11,7 +11,21 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { AlertTriangle, CheckCircle2, Clock, XCircle, Download, RefreshCw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, XCircle, Download, RefreshCw, Copy, Check } from "lucide-react";
+import { useState as useCopyState } from "react";
+
+function CopyValorBtn({ value }: { value: number }) {
+  const [copied, setCopied] = useCopyState(false);
+  if (value <= 0.05) return <span className="text-muted-foreground text-xs">—</span>;
+  return (
+    <button
+      onClick={() => navigator.clipboard.writeText(value.toFixed(2)).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })}
+      className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border transition-all ${copied ? "border-emerald-300 text-emerald-700 bg-emerald-50" : "border-border text-muted-foreground hover:bg-muted"}`}
+    >
+      {copied ? <><Check className="h-3 w-3" />Copiado</> : <><Copy className="h-3 w-3" />{value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</>}
+    </button>
+  );
+}
 import {
   classificarPedidos,
   ROTULO_TIPO,
@@ -278,16 +292,17 @@ export function DivergenciasDashboard() {
                 <th className="px-3 py-2 font-medium">Marca/Loja</th>
                 <th className="px-3 py-2 font-medium">Tipo</th>
                 <th className="px-3 py-2 font-medium text-right">Valor</th>
+                <th className="px-3 py-2 font-medium text-right">Lançar Everest</th>
                 <th className="px-3 py-2 font-medium">Tratativa</th>
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
             <tbody>
               {isLoading && (
-                <tr><td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">Carregando…</td></tr>
+                <tr><td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">Carregando…</td></tr>
               )}
               {!isLoading && filtrados.length === 0 && (
-                <tr><td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">
+                <tr><td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">
                   Nenhuma divergência encontrada com os filtros atuais.
                 </td></tr>
               )}
@@ -304,6 +319,7 @@ export function DivergenciasDashboard() {
                     </td>
                     <td className="px-3 py-2"><BadgeTipo tipo={tipo} /></td>
                     <td className="px-3 py-2 text-right font-medium">{fmt(Number(p.divergencia_valor ?? 0))}</td>
+                    <td className="px-3 py-2 text-right"><CopyValorBtn value={Number(p.divergencia_valor ?? 0)} /></td>
                     <td className="px-3 py-2"><BadgeStatus status={status} /></td>
                     <td className="px-3 py-2">
                       <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setTratandoId(p.id)}>

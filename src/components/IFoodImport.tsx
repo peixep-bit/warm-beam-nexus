@@ -156,7 +156,6 @@ export function IFoodImport() {
           total_repasse: resumo?.total_liquido_ifood ?? 0,
           status: "processado",
           source_type: "extrato",
-          platform_slug: "ifood",
         })
         .select()
         .single();

@@ -282,8 +282,14 @@ export function reconciliar(
         return;
       }
 
-      // Divergência real: PDV esperava receber X, iFood repassou Y
+      // divergencia_repasse = comissão iFood (diferença entre faturado PDV e líquido recebido)
+      // SEMPRE existe — é o custo da plataforma. Não é erro de conciliação, é informativo.
       const divergencia_repasse = Math.round((p.total_faturado - e.valor_liquido) * 100) / 100;
+
+      // Cruzamento correto: VALOR DOS ITENS vendidos deve ser igual nos dois lados
+      // Se difere → pedido editado, cancelamento parcial ou erro de lançamento → DIVERGENTE
+      const diff_itens = Math.abs(e.valor_itens - p.total_produtos);
+
       const conflito_status =
         p.status_pdv.toLowerCase() === "pago" && p.status_parceiro === "cancelado";
 
@@ -291,12 +297,15 @@ export function reconciliar(
       let motivo: string | undefined;
 
       if (conflito_status) {
+        // PDV marcou pago mas iFood cancelou → risco real de perda financeira
         status = "divergente_status";
         motivo = `PDV=PAGO mas iFood=CANCELADO — ${p.motivo_cancelamento ?? "sem motivo"}`;
-      } else if (Math.abs(divergencia_repasse) > tolerancia) {
+      } else if (diff_itens > tolerancia) {
+        // Valor dos itens difere → mesmo pedido mas com valores diferentes
         status = "divergente_valor";
-        motivo = `PDV esperava ${fmtBRL(p.total_faturado)} · iFood repassou ${fmtBRL(e.valor_liquido)} · Diff ${fmtBRL(divergencia_repasse)}`;
+        motivo = `Valor dos itens diverge: PDV ${fmtBRL(p.total_produtos)} · iFood ${fmtBRL(e.valor_itens)} · Diff ${fmtBRL(e.valor_itens - p.total_produtos)}`;
       }
+      // A diferença total_faturado_pdv vs valor_liquido_ifood = comissão → salva como info
 
       resultado.push({
         id_curto: e.id_curto,

@@ -194,20 +194,33 @@ export function IFoodFechamento({ periodoStart: initStart = "", periodoEnd: init
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-end justify-between">
+      {/* Header com seletor de período */}
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs text-muted-foreground">{periodoStart} a {periodoEnd} · iFood</p>
           <h2 className="text-lg font-semibold">Fechamento do período</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">iFood · {periodoStart} a {periodoEnd}</p>
         </div>
-          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-            <CheckCircle2 className="h-3 w-3 mr-1" />{totPedidos} pedidos
-          </Badge>
-          {divs.length > 0 && (
-            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-              <AlertTriangle className="h-3 w-3 mr-1" />{divs.length} divergências
+        <div className="flex items-end gap-2 flex-wrap">
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">De</label>
+            <input type="date" value={periodoStart} onChange={e => setPeriodoStart(e.target.value)}
+              className="h-8 text-xs px-2 border border-input rounded-md bg-background" />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Até</label>
+            <input type="date" value={periodoEnd} onChange={e => setPeriodoEnd(e.target.value)}
+              className="h-8 text-xs px-2 border border-input rounded-md bg-background" />
+          </div>
+          <div className="flex gap-2 pb-0.5">
+            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+              <CheckCircle2 className="h-3 w-3 mr-1" />{totPedidos} pedidos
             </Badge>
-          )}
+            {divs.length > 0 && (
+              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                <AlertTriangle className="h-3 w-3 mr-1" />{divs.length} divergências
+              </Badge>
+            )}
+          </div>
         </div>
       </div>
 

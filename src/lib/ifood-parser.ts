@@ -1,0 +1,374 @@
+/**
+ * ifood-parser.ts
+ * Parser dedicado para os dois arquivos iFood:
+ *   1. Extrato de pedidos (portal iFood → Relatórios → Pedidos)
+ *   2. Relatório PDV (exportação do sistema de caixa integrado)
+ *
+ * Fórmula de cruzamento validada com dados reais:
+ *   Chave:       ID CURTO DO PEDIDO (extrato) = Número do pedido no Parceiro (PDV)
+ *   Divergência: Total do Faturado no PDV vs VALOR LIQUIDO (iFood)
+ */
+
+import * as XLSX from "xlsx";
+
+// ─── Tipos ────────────────────────────────────────────────────
+
+export interface IFoodExtratoRow {
+  id_completo: string;
+  id_curto: string;            // chave de cruzamento
+  loja: string;
+  data_transacao: string;      // YYYY-MM-DD
+  hora: string;
+  turno: string;
+  order_status: "entregue" | "cancelado" | "cancelamento_parcial" | "pendente";
+  canal_venda: string;
+  produto_logistico: string;
+  forma_pagamento: string;
+  // Valores — VALOR LIQUIDO é a fonte de verdade do repasse
+  valor_itens: number;         // VALOR DOS ITENS — chave de cruzamento com PDV
+  total_cliente: number;       // TOTAL PAGO PELO CLIENTE
+  taxa_entrega: number;        // retida pelo iFood — NÃO entra no repasse
+  incentivo_ifood: number;
+  incentivo_loja: number;
+  incentivo_rede: number;
+  taxa_servico: number;
+  taxas_comissoes: number;     // já negativo
+  valor_liquido: number;       // FONTE DE VERDADE do repasse
+  tipo: "pedido" | "sob_demanda";
+}
+
+export interface IFoodPDVRow {
+  loja: string;
+  marca: string;
+  data_transacao: string;
+  hora: string;
+  numero_pdv: string;
+  numero_parceiro: string;     // chave de cruzamento
+  tem_erro: boolean;
+  motivo_erro: string | null;
+  // Valores
+  total_produtos: number;      // valor dos itens (sem entrega)
+  desconto_loja_venda: number;
+  desconto_loja_produto: number;
+  desconto_loja_entrega: number;
+  desconto_parceiro_venda: number;
+  desconto_parceiro_entrega: number;
+  taxa_entrega: number;
+  total_pago_parceiro: number;
+  total_faturado: number;      // o que o PDV espera receber
+  forma_pagamento: string;
+  status_parceiro: "entregue" | "cancelado" | "pendente";
+  status_pdv: string;
+  motivo_cancelamento: string | null;
+}
+
+export interface ReconciliacaoItem {
+  id_curto: string;
+  status:
+    | "conciliado"
+    | "divergente_valor"
+    | "divergente_status"
+    | "nao_encontrado_pdv"
+    | "nao_encontrado_extrato"
+    | "cancelado"
+    | "sob_demanda";
+  // Valores das duas fontes
+  valor_itens_ifood: number;
+  total_faturado_pdv: number;
+  valor_liquido_ifood: number;
+  // A divergência real para lançar no Everest:
+  // diferença entre o que PDV esperava e o que iFood repassou
+  divergencia_repasse: number;
+  // Metadados
+  loja: string;
+  data_transacao: string;
+  forma_pagamento: string;
+  motivo?: string;
+}
+
+export interface ResumoReconciliacao {
+  total_pedidos: number;
+  conciliados: number;
+  divergentes: number;
+  cancelados: number;
+  sob_demanda: number;
+  total_bruto_ifood: number;    // soma VALOR DOS ITENS
+  total_faturado_pdv: number;   // soma Total Faturado PDV
+  total_liquido_ifood: number;  // soma VALOR LIQUIDO — o que de fato entra
+  diferenca_repasse: number;    // total_faturado_pdv - total_liquido_ifood
+  pct_conciliado: number;
+}
+
+// ─── Utilitários ─────────────────────────────────────────────
+
+const norm = (s: unknown) =>
+  String(s ?? "").replace(/^0+/, "").trim() || String(s ?? "").trim();
+
+function parseNum(v: unknown): number {
+  if (v === null || v === undefined || v === "") return 0;
+  const n = Number(String(v).replace(",", ".").replace(/[^\d.-]/g, ""));
+  return isNaN(n) ? 0 : Math.round(n * 100) / 100;
+}
+
+function parseDate(v: unknown): string {
+  const s = String(v ?? "").trim();
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return s;
+}
+
+function parseHora(v: unknown): string {
+  const s = String(v ?? "").trim();
+  const m = s.match(/(\d{2}:\d{2}:\d{2})$/);
+  return m ? m[1] : "00:00:00";
+}
+
+function parseStatus(s: string): IFoodExtratoRow["order_status"] {
+  const u = s.toUpperCase().trim();
+  if (u === "CONCLUIDO" || u === "ENTREGUE") return "entregue";
+  if (u.includes("PARCIAL")) return "cancelamento_parcial";
+  if (u.includes("CANCEL")) return "cancelado";
+  return "pendente";
+}
+
+function parseStatusPDV(s: string): IFoodPDVRow["status_parceiro"] {
+  const u = s.toLowerCase().trim();
+  if (u === "entregue" || u === "concluido") return "entregue";
+  if (u.includes("cancel")) return "cancelado";
+  return "pendente";
+}
+
+function lerXlsx(buffer: ArrayBuffer): Record<string, unknown>[] {
+  const wb = XLSX.read(buffer, { type: "array" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+    header: 0,
+    defval: "",
+  });
+}
+
+// ─── Parser 1: Extrato iFood ──────────────────────────────────
+
+export async function parseIFoodExtrato(file: File): Promise<IFoodExtratoRow[]> {
+  const buf = await file.arrayBuffer();
+  const rows = lerXlsx(buf);
+
+  return rows
+    .filter((r) => String(r["ID COMPLETO DO PEDIDO"] ?? "").trim())
+    .map((r) => {
+      const liq = parseNum(r["VALOR LIQUIDO (R$)"]);
+      const pl = String(r["PRODUTO LOGISTICO"] ?? "").trim();
+      const dh = String(r["DATA E HORA DO PEDIDO"] ?? "");
+      return {
+        id_completo: String(r["ID COMPLETO DO PEDIDO"]).trim(),
+        id_curto: String(r["ID CURTO DO PEDIDO"] ?? "").trim(),
+        loja: String(r["NOME DA LOJA"] ?? "").trim(),
+        data_transacao: parseDate(dh),
+        hora: parseHora(dh),
+        turno: String(r["TURNO"] ?? "").trim(),
+        order_status: parseStatus(String(r["STATUS FINAL DO PEDIDO"] ?? "")),
+        canal_venda: String(r["CANAL DE VENDA"] ?? "iFood").trim(),
+        produto_logistico: pl,
+        forma_pagamento: String(r["FORMA DE PAGAMENTO"] ?? "").trim(),
+        valor_itens: parseNum(r["VALOR DOS ITENS (R$)"]),
+        total_cliente: parseNum(r["TOTAL PAGO PELO CLIENTE (R$)"]),
+        taxa_entrega: parseNum(r["TAXA DE ENTREGA PAGA PELO CLIENTE (R$)"]),
+        incentivo_ifood: parseNum(r["INCENTIVO PROMOCIONAL DO IFOOD (R$)"]),
+        incentivo_loja: parseNum(r["INCENTIVO PROMOCIONAL DA LOJA (R$)"]),
+        incentivo_rede: parseNum(r["INCENTIVO PROMOCIONAL DA REDE (R$)"]),
+        taxa_servico: parseNum(r["TAXA DE SERVIÇO (R$)"]),
+        taxas_comissoes: parseNum(r["TAXAS E COMISSOES (R$)"]),
+        valor_liquido: liq,
+        tipo: pl.toUpperCase().includes("SOB DEMANDA") && liq < 0
+          ? "sob_demanda"
+          : "pedido",
+      } as IFoodExtratoRow;
+    });
+}
+
+// ─── Parser 2: PDV iFood ──────────────────────────────────────
+
+export async function parseIFoodPDV(file: File): Promise<IFoodPDVRow[]> {
+  const buf = await file.arrayBuffer();
+  const rows = lerXlsx(buf);
+
+  return rows
+    .filter((r) => String(r["Número do pedido no Parceiro"] ?? "").trim())
+    .map((r) => ({
+      loja: String(r["Loja"] ?? "").trim(),
+      marca: String(r["Marca"] ?? "").trim(),
+      data_transacao: parseDate(r["Data"]),
+      hora: parseHora(r["Horário"]),
+      numero_pdv: String(r["Número do pedido no PDV"] ?? "").trim(),
+      numero_parceiro: String(r["Número do pedido no Parceiro"]).trim(),
+      tem_erro: String(r["Possui Erro de Integração?"] ?? "") === "Sim",
+      motivo_erro: String(r["Motivo do erro de integração"] ?? "") || null,
+      total_produtos: parseNum(r["Total em Produtos"]),
+      desconto_loja_venda: parseNum(r["Desconto loja em Venda"]),
+      desconto_loja_produto: parseNum(r["Desconto loja em Produtos"]),
+      desconto_loja_entrega: parseNum(r["Desconto loja em Taxa de Entrega"]),
+      desconto_parceiro_venda: parseNum(r["Desconto Parceiro em Venda"]),
+      desconto_parceiro_entrega: parseNum(r["Desconto Parceiro em Taxa de Entrega"]),
+      taxa_entrega: parseNum(r["Taxa de entrega"]),
+      total_pago_parceiro: parseNum(r["Total Pago no Parceiro"]),
+      total_faturado: parseNum(r["Total do Faturado no PDV"]),
+      forma_pagamento: String(r["Forma de pagamento no Parceiro"] ?? "").trim(),
+      status_parceiro: parseStatusPDV(
+        String(r["Status no Parceiro (Referente ao ID de Status no SAC)"] ?? "")
+      ),
+      status_pdv: String(r["Status no PDV"] ?? "").trim(),
+      motivo_cancelamento:
+        String(r["Motivo de cancelamento no Parceiro"] ?? "") || null,
+    })) as IFoodPDVRow[];
+}
+
+// ─── Engine de reconciliação client-side ─────────────────────
+
+export function reconciliar(
+  extrato: IFoodExtratoRow[],
+  pdv: IFoodPDVRow[],
+  tolerancia = 0.05
+): ReconciliacaoItem[] {
+  const resultado: ReconciliacaoItem[] = [];
+
+  const pdvMap = new Map<string, IFoodPDVRow>();
+  pdv.forEach((p) => pdvMap.set(norm(p.numero_parceiro), p));
+
+  const extratoMap = new Map<string, IFoodExtratoRow>();
+  extrato.forEach((e) => extratoMap.set(norm(e.id_curto), e));
+
+  // Sob Demanda (débitos avulsos de entrega)
+  extrato
+    .filter((e) => e.tipo === "sob_demanda")
+    .forEach((e) =>
+      resultado.push({
+        id_curto: e.id_curto,
+        status: "sob_demanda",
+        valor_itens_ifood: e.valor_itens,
+        total_faturado_pdv: 0,
+        valor_liquido_ifood: e.valor_liquido,
+        divergencia_repasse: e.valor_liquido,
+        loja: e.loja,
+        data_transacao: e.data_transacao,
+        forma_pagamento: "Pagamento via restaurante",
+        motivo: `Entrega avulsa debitada — R$ ${Math.abs(e.valor_liquido).toFixed(2)}`,
+      })
+    );
+
+  // Extrato × PDV
+  extrato
+    .filter((e) => e.tipo === "pedido")
+    .forEach((e) => {
+      const key = norm(e.id_curto);
+      const p = pdvMap.get(key);
+
+      if (!p) {
+        resultado.push({
+          id_curto: e.id_curto,
+          status: e.order_status === "cancelado" ? "cancelado" : "nao_encontrado_pdv",
+          valor_itens_ifood: e.valor_itens,
+          total_faturado_pdv: 0,
+          valor_liquido_ifood: e.valor_liquido,
+          divergencia_repasse: e.valor_liquido,
+          loja: e.loja,
+          data_transacao: e.data_transacao,
+          forma_pagamento: e.forma_pagamento,
+          motivo:
+            e.order_status === "cancelado"
+              ? "Cancelado no iFood"
+              : "Pedido no extrato sem correspondente no PDV",
+        });
+        return;
+      }
+
+      // Divergência real: PDV esperava receber X, iFood repassou Y
+      const divergencia_repasse = Math.round((p.total_faturado - e.valor_liquido) * 100) / 100;
+      const conflito_status =
+        p.status_pdv.toLowerCase() === "pago" && p.status_parceiro === "cancelado";
+
+      let status: ReconciliacaoItem["status"] = "conciliado";
+      let motivo: string | undefined;
+
+      if (conflito_status) {
+        status = "divergente_status";
+        motivo = `PDV=PAGO mas iFood=CANCELADO — ${p.motivo_cancelamento ?? "sem motivo"}`;
+      } else if (Math.abs(divergencia_repasse) > tolerancia) {
+        status = "divergente_valor";
+        motivo = `PDV esperava ${fmtBRL(p.total_faturado)} · iFood repassou ${fmtBRL(e.valor_liquido)} · Diff ${fmtBRL(divergencia_repasse)}`;
+      }
+
+      resultado.push({
+        id_curto: e.id_curto,
+        status,
+        valor_itens_ifood: e.valor_itens,
+        total_faturado_pdv: p.total_faturado,
+        valor_liquido_ifood: e.valor_liquido,
+        divergencia_repasse,
+        loja: p.loja || e.loja,
+        data_transacao: e.data_transacao,
+        forma_pagamento: e.forma_pagamento || p.forma_pagamento,
+        motivo,
+      });
+    });
+
+  // PDV sem extrato
+  pdv
+    .filter(
+      (p) =>
+        !extratoMap.has(norm(p.numero_parceiro)) &&
+        p.status_parceiro === "entregue"
+    )
+    .forEach((p) =>
+      resultado.push({
+        id_curto: p.numero_parceiro,
+        status: "nao_encontrado_extrato",
+        valor_itens_ifood: 0,
+        total_faturado_pdv: p.total_faturado,
+        valor_liquido_ifood: 0,
+        divergencia_repasse: -p.total_faturado,
+        loja: p.loja,
+        data_transacao: p.data_transacao,
+        forma_pagamento: p.forma_pagamento,
+        motivo: "Pedido no PDV sem correspondente no extrato iFood",
+      })
+    );
+
+  // Ordenar: divergências primeiro
+  const ordem: Record<string, number> = {
+    divergente_status: 0,
+    divergente_valor: 1,
+    nao_encontrado_pdv: 2,
+    nao_encontrado_extrato: 3,
+    sob_demanda: 4,
+    cancelado: 5,
+    conciliado: 6,
+  };
+  return resultado.sort((a, b) => (ordem[a.status] ?? 9) - (ordem[b.status] ?? 9));
+}
+
+export function calcularResumo(items: ReconciliacaoItem[]): ResumoReconciliacao {
+  const pedidos = items.filter((i) => i.status !== "sob_demanda");
+  const conciliados = pedidos.filter((i) => i.status === "conciliado").length;
+  const sob = items.filter((i) => i.status === "sob_demanda");
+  return {
+    total_pedidos: pedidos.length,
+    conciliados,
+    divergentes: pedidos.filter((i) =>
+      ["divergente_valor", "divergente_status",
+       "nao_encontrado_pdv", "nao_encontrado_extrato"].includes(i.status)
+    ).length,
+    cancelados: pedidos.filter((i) => i.status === "cancelado").length,
+    sob_demanda: sob.length,
+    total_bruto_ifood: pedidos.reduce((s, i) => s + i.valor_itens_ifood, 0),
+    total_faturado_pdv: pedidos.reduce((s, i) => s + i.total_faturado_pdv, 0),
+    total_liquido_ifood: pedidos.reduce((s, i) => s + Math.max(i.valor_liquido_ifood, 0), 0),
+    diferenca_repasse: pedidos.reduce((s, i) => s + i.divergencia_repasse, 0),
+    pct_conciliado: pedidos.length
+      ? Math.round((conciliados / pedidos.length) * 100)
+      : 0,
+  };
+}
+
+export const fmtBRL = (n: number): string =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);

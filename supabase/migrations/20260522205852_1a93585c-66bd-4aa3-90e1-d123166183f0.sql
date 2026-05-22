@@ -1,0 +1,1 @@
+ALTER TABLE public.statement_imports ADD COLUMN IF NOT EXISTS platform_slug text;

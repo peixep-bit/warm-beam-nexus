@@ -376,9 +376,18 @@ export function reconciliar(
 }
 
 export function calcularResumo(items: ReconciliacaoItem[]): ResumoReconciliacao {
-  const pedidos = items.filter((i) => i.status !== "sob_demanda");
+  const pedidos    = items.filter((i) => i.status !== "sob_demanda");
   const conciliados = pedidos.filter((i) => i.status === "conciliado").length;
-  const sob = items.filter((i) => i.status === "sob_demanda");
+  const sob        = items.filter((i) => i.status === "sob_demanda");
+
+  // Cancelados NÃO entram nos totais financeiros:
+  // iFood não cobrou comissão e não repassou nada — incluí-los distorceria
+  // a comissão total (bruto − líquido inflaria porque bruto > 0 mas líquido = 0)
+  const ativos = pedidos.filter((i) => i.status !== "cancelado");
+
+  const totalBruto  = ativos.reduce((s, i) => s + i.valor_itens_ifood, 0);
+  const totalLiquido = ativos.reduce((s, i) => s + Math.max(i.valor_liquido_ifood, 0), 0);
+
   return {
     total_pedidos: pedidos.length,
     conciliados,
@@ -388,10 +397,10 @@ export function calcularResumo(items: ReconciliacaoItem[]): ResumoReconciliacao 
     ).length,
     cancelados: pedidos.filter((i) => i.status === "cancelado").length,
     sob_demanda: sob.length,
-    total_bruto_ifood: pedidos.reduce((s, i) => s + i.valor_itens_ifood, 0),
-    total_faturado_pdv: pedidos.reduce((s, i) => s + i.total_faturado_pdv, 0),
-    total_liquido_ifood: pedidos.reduce((s, i) => s + Math.max(i.valor_liquido_ifood, 0), 0),
-    diferenca_repasse: pedidos.reduce((s, i) => s + i.divergencia_repasse, 0),
+    total_bruto_ifood: totalBruto,
+    total_faturado_pdv: ativos.reduce((s, i) => s + i.total_faturado_pdv, 0),
+    total_liquido_ifood: totalLiquido,
+    diferenca_repasse: ativos.reduce((s, i) => s + i.divergencia_repasse, 0),
     pct_conciliado: pedidos.length
       ? Math.round((conciliados / pedidos.length) * 100)
       : 0,

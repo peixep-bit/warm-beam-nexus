@@ -109,7 +109,10 @@ function DetalhesPedido({ item }: { item: ReconciliacaoItem }) {
             <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
             PDV — o que o caixa registrou
           </p>
-          <Campo label="Valor dos itens (PDV)" valor={item.total_faturado_pdv > 0 ? item.valor_itens_ifood : item.valor_itens_ifood} destaque />
+          <Campo label="Valor dos itens (PDV)" valor={item.valor_itens_ifood} destaque />
+          {(item.desconto_loja_pdv ?? 0) > 0 && (
+            <Campo label="Desconto loja (PDV)" valor={-(item.desconto_loja_pdv ?? 0)} cor="text-amber-600" />
+          )}
           <Campo label="Total faturado (PDV)" valor={item.total_faturado_pdv} cor="text-blue-700" />
         </div>
 

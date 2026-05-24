@@ -56,6 +56,8 @@ export interface IFoodPDVRow {
   taxa_entrega: number;
   total_pago_parceiro: number;
   total_faturado: number;      // o que o PDV espera receber
+  // Desconto total bancado pela loja (venda + produto)
+  desconto_loja_total: number;
   forma_pagamento: string;
   status_parceiro: "entregue" | "cancelado" | "pendente";
   status_pdv: string;
@@ -85,6 +87,8 @@ export interface ReconciliacaoItem {
   incentivo_rede?: number;
   taxa_servico?: number;
   taxa_entrega?: number;       // retida pelo iFood
+  // Desconto da loja (venda + produto) — explica diferença Valor Itens vs Total Faturado PDV
+  desconto_loja_pdv?: number;
   // Metadados
   loja: string;
   data_transacao: string;
@@ -219,6 +223,7 @@ export async function parseIFoodPDV(file: File): Promise<IFoodPDVRow[]> {
       taxa_entrega: parseNum(r["Taxa de entrega"]),
       total_pago_parceiro: parseNum(r["Total Pago no Parceiro"]),
       total_faturado: parseNum(r["Total do Faturado no PDV"]),
+      desconto_loja_total: parseNum(r["Desconto loja em Venda"]) + parseNum(r["Desconto loja em Produtos"]),
       forma_pagamento: String(r["Forma de pagamento no Parceiro"] ?? "").trim(),
       status_parceiro: parseStatusPDV(
         String(r["Status no Parceiro (Referente ao ID de Status no SAC)"] ?? "")
@@ -327,6 +332,7 @@ export function reconciliar(
         incentivo_rede: e.incentivo_rede,
         taxa_servico: e.taxa_servico,
         taxa_entrega: e.taxa_entrega,
+        desconto_loja_pdv: p.desconto_loja_total,
         loja: p.loja || e.loja,
         data_transacao: e.data_transacao,
         forma_pagamento: e.forma_pagamento || p.forma_pagamento,

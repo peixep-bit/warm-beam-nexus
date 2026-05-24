@@ -144,6 +144,12 @@ export function ReconciliationDashboard() {
       return dates;
     },
     enabled: !!selectedMarca,
+    // Auto-selecionar o dia mais recente quando as datas carregam
+    onSuccess: (dates: string[]) => {
+      if (dates.length > 0 && !selectedDate) {
+        setSelectedDate(dates[dates.length - 1]);
+      }
+    },
   });
 
   // Fetch items for the selected marca + date
@@ -331,7 +337,7 @@ export function ReconciliationDashboard() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <div>
               <Label className="text-xs font-medium text-muted-foreground">Marca</Label>
-              <Select value={selectedMarcaKey} onValueChange={(v) => { setSelectedMarcaKey(v); setSelectedDate(""); }}>
+              <Select value={selectedMarcaKey} onValueChange={(v) => { setSelectedMarcaKey(v); setSelectedDate("") /* datas vão carregar e auto-selecionar o mais recente */; }}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {marcaOptions.map((o) => (
@@ -407,8 +413,8 @@ export function ReconciliationDashboard() {
                   <p className="font-bold text-lg">{fmt(totals.valorItens)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Incentivo Loja</p>
-                  <p className="font-bold text-lg text-destructive">{fmt(totals.incentivoLoja)}</p>
+                  <p className="text-xs text-muted-foreground mb-1">Inc. Loja</p>
+                  <p className="font-bold text-lg text-amber-600">{fmt(totals.incentivoLoja)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Taxas/Com.</p>
@@ -461,6 +467,22 @@ export function ReconciliationDashboard() {
                   </div>
                 </div>
               </div>
+
+              {/* Incentivo iFood e Taxa Serviço — aparecem quando há dados do extrato */}
+              {(totals.incentivoIfood !== 0 || totals.taxaServico !== 0) && (
+                <div className="grid grid-cols-2 gap-4 text-center text-sm mt-3 pt-3 border-t">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Incentivo iFood</p>
+                    <p className="font-bold text-lg text-emerald-600">+{fmt(totals.incentivoIfood)}</p>
+                    <p className="text-[10px] text-muted-foreground">subsídio da plataforma</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Taxa de Serviço</p>
+                    <p className="font-bold text-lg text-emerald-600">+{fmt(totals.taxaServico)}</p>
+                    <p className="text-[10px] text-muted-foreground">repasse ao restaurante</p>
+                  </div>
+                </div>
+              )}
 
               <p className="text-xs text-muted-foreground text-center mt-3 border-t pt-3">
                 Itens {fmt(totals.valorItens)} + Inc. Loja {fmt(totals.incentivoLoja)} + Com. {fmt(totals.taxasComissoes)} + Entrega {fmt(totals.taxaEntrega)} − Desc. {fmt(totals.desconto)} = <strong className="text-primary">{fmt(totals.totalLiquido)}</strong>

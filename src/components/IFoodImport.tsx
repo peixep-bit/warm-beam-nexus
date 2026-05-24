@@ -109,11 +109,28 @@ function DetalhesPedido({ item }: { item: ReconciliacaoItem }) {
             <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
             PDV — o que o caixa registrou
           </p>
-          <Campo label="Valor dos itens (PDV)" valor={item.valor_itens_ifood} destaque />
+          {/* Total em Produtos = valor bruto antes de qualquer desconto */}
+          <Campo label="Total em Produtos (PDV)" valor={item.valor_itens_ifood} destaque />
+          {/* Desconto bancado pela loja — aparece só quando > 0 */}
           {(item.desconto_loja_pdv ?? 0) > 0 && (
-            <Campo label="Desconto loja (PDV)" valor={-(item.desconto_loja_pdv ?? 0)} cor="text-amber-600" />
+            <Campo label="Desconto loja" valor={-(item.desconto_loja_pdv ?? 0)} cor="text-amber-600" />
           )}
+          {/* Total Faturado = o que o PDV registrou como valor a receber */}
           <Campo label="Total faturado (PDV)" valor={item.total_faturado_pdv} cor="text-blue-700" />
+          {/* Taxa oculta iFood — quando o líquido não é explicado pelos campos disponíveis */}
+          {item.liquido_metodo === "ifood_fonte_verdade" && (
+            <div className="rounded-lg px-3 py-2 border border-amber-200 bg-amber-50">
+              <p className="text-[10px] text-amber-700 mb-0.5 flex items-center gap-1">
+                <span>⚠️</span> Taxa não discriminada (iFood)
+              </p>
+              <p className="text-sm font-semibold font-mono text-amber-700">
+                {fmtBRL((item.valor_liquido_ifood) - (item.total_faturado_pdv - Math.abs(item.taxas_comissoes ?? 0)))}
+              </p>
+              <p className="text-[10px] text-amber-600 mt-0.5">
+                Diferença residual não identificada nas colunas do extrato
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Cruzamento central */}

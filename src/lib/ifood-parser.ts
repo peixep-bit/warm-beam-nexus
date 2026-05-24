@@ -375,10 +375,17 @@ export function reconciliar(
       const conflito_status =
         p.status_pdv.toLowerCase() === "pago" && p.status_parceiro === "cancelado";
 
+      // Detectar cancelamento pelo extrato iFood (fonte de verdade do status)
+      const extratoCancelado = e.order_status === "cancelado" || e.order_status === "cancelamento_parcial";
+
       let status: ReconciliacaoItem["status"] = "conciliado";
       let motivo: string | undefined;
 
-      if (conflito_status) {
+      if (extratoCancelado) {
+        // Extrato iFood confirma cancelamento — não entra nos totais financeiros
+        status = "cancelado";
+        motivo = `Cancelado no iFood — valor líquido R$ 0,00`;
+      } else if (conflito_status) {
         // PDV marcou pago mas iFood cancelou → risco real de perda financeira
         status = "divergente_status";
         motivo = `PDV=PAGO mas iFood=CANCELADO — ${p.motivo_cancelamento ?? "sem motivo"}`;

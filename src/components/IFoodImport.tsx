@@ -209,6 +209,22 @@ function DetalhesPedido({ item }: { item: ReconciliacaoItem }) {
         </div>
       )}
 
+      {/* Auditoria do cálculo */}
+      {item.liquido_metodo && item.liquido_metodo !== "base" && item.liquido_metodo !== "cancelado" && (
+        <div className="flex gap-2 bg-blue-50 border border-blue-100 rounded-lg p-2 text-xs text-blue-700">
+          <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          {item.liquido_metodo === "base_mais_inc_loja" && (
+            <span>Incentivo loja de <strong>{fmtBRL(item.liquido_ajuste ?? 0)}</strong> foi reintegrado ao repasse pelo iFood.</span>
+          )}
+          {item.liquido_metodo === "base_mais_inc_ifood" && (
+            <span>Incentivo iFood de <strong>{fmtBRL(item.liquido_ajuste ?? 0)}</strong> foi reintegrado ao repasse.</span>
+          )}
+          {item.liquido_metodo === "ifood_fonte_verdade" && (
+            <span>Diferença residual não explicada por incentivos — usando valor líquido iFood como fonte de verdade.</span>
+          )}
+        </div>
+      )}
+
       {/* Metadados */}
       <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1 border-t">
         <span>📅 {item.data_transacao}</span>

@@ -349,9 +349,11 @@ export function IFoodImport({ onVerDivergencias }: {
         loja: i.loja || lojaDetectada,
         marca: marcaDetectada || null,
         descricao: i.forma_pagamento || i.status,
-        valor_pdv: i.valor_itens_ifood,
+        valor_pdv: i.valor_itens_ifood,           // Total em Produtos (bruto)
         valor_bruto: i.valor_itens_ifood,
         valor_liquido: i.valor_liquido_ifood,
+        valor_liquido_conciliado: i.total_faturado_pdv, // Total Faturado PDV (após desc loja)
+        desconto: i.desconto_loja_pdv ?? 0,             // Desconto loja em PDV
         taxas_comissoes: i.taxas_comissoes ?? 0,
         incentivo_ifood: i.incentivo_ifood ?? 0,
         incentivo_loja: i.incentivo_loja ?? 0,

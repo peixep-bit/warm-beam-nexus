@@ -56,7 +56,8 @@ export interface IFoodPDVRow {
   desconto_parceiro_entrega: number;
   taxa_entrega: number;
   total_pago_parceiro: number;
-  total_faturado: number;      // o que o PDV espera receber
+  total_faturado: number;      // o que o PDV espera receber (campo direto do arquivo)
+  total_faturado_calculado: number; // recalculado pela fórmula completa (deve = total_faturado)
   // Desconto total bancado pela loja (venda + produto)
   desconto_loja_total: number;
   forma_pagamento: string;
@@ -228,7 +229,18 @@ export async function parseIFoodPDV(file: File): Promise<IFoodPDVRow[]> {
       taxa_entrega: parseNum(r["Taxa de entrega"]),
       total_pago_parceiro: parseNum(r["Total Pago no Parceiro"]),
       total_faturado: parseNum(r["Total do Faturado no PDV"]),
+      // desconto_loja_total = o que foi descontado da loja nos itens (visível no PDV)
+      // Não inclui desconto de entrega pois taxa entrega entra e sai
       desconto_loja_total: parseNum(r["Desconto loja em Venda"]) + parseNum(r["Desconto loja em Produtos"]),
+      // Total Faturado calculado pela fórmula completa — para validação
+      // Total em Produtos - DescLojaVenda - DescLojaProdutos + TaxaEntrega - DescLojaEntrega - DescParceiroEntrega
+      total_faturado_calculado:
+        parseNum(r["Total em Produtos"])
+        - parseNum(r["Desconto loja em Venda"])
+        - parseNum(r["Desconto loja em Produtos"])
+        + parseNum(r["Taxa de entrega"])
+        - parseNum(r["Desconto loja em Taxa de Entrega"])
+        - parseNum(r["Desconto Parceiro em Taxa de Entrega"]),
       forma_pagamento: String(r["Forma de pagamento no Parceiro"] ?? "").trim(),
       status_parceiro: parseStatusPDV(
         String(r["Status no Parceiro (Referente ao ID de Status no SAC)"] ?? "")

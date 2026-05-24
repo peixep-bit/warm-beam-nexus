@@ -1,166 +1,240 @@
-import React, { useState, useMemo } from "react";
+/**
+ * ReconciliationDashboard.tsx — v2
+ * Lê os dados salvos do import e exibe exatamente o mesmo layout do preview.
+ * Fonte da verdade = o que foi importado. Sem recalcular regras próprias.
+ */
+
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useAuth } from "@/hooks/useAuth";
+import { fmtBRL } from "@/lib/ifood-parser";
+import {
+  CheckCircle2, AlertTriangle, XCircle, Info,
+  ChevronDown, ChevronUp, ArrowRight, Equal,
+} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { calcularTotalLiquidoPDV, calcularConciliar, aplicarRegras, type FeeRule, type BaseValues } from "@/lib/calculo-conciliacao";
-import { Calculator, Search, Receipt, CheckCircle2, XCircle, ArrowRightLeft, BookOpen } from "lucide-react";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
-const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-// Escape special characters for PostgREST filter values to prevent filter injection
-const escapeFilterValue = (v: string) => v.replace(/[(),."\\]/g, (ch) => `\\${ch}`);
-const fmtDate = (d: string) => {
-  const [y, m, day] = d.split("-");
-  return `${day}/${m}/${y}`;
-};
-const isCancelado = (item: any) => {
-  const desc = String(item.descricao ?? "").toUpperCase();
-  return desc.includes("CANCELADO") || desc.includes("PARCIAL");
-};
+// ─── Status config (igual ao IFoodImport) ─────────────────────
+
+const STATUS_CFG = {
+  nenhuma:                { label: "Conciliado",           cls: "bg-emerald-100 text-emerald-800", bar: "bg-emerald-500",  Icon: CheckCircle2  },
+  conciliado:             { label: "Conciliado",           cls: "bg-emerald-100 text-emerald-800", bar: "bg-emerald-500",  Icon: CheckCircle2  },
+  divergente_valor:       { label: "Divergência de valor", cls: "bg-amber-100 text-amber-800",     bar: "bg-amber-500",    Icon: AlertTriangle },
+  divergente_status:      { label: "Status conflitante",   cls: "bg-red-100 text-red-800",         bar: "bg-red-500",      Icon: XCircle       },
+  nao_encontrado_pdv:     { label: "Sem PDV",              cls: "bg-orange-100 text-orange-800",   bar: "bg-orange-500",   Icon: AlertTriangle },
+  nao_encontrado_extrato: { label: "Sem extrato",          cls: "bg-orange-100 text-orange-800",   bar: "bg-orange-400",   Icon: AlertTriangle },
+  cancelado:              { label: "Cancelado",            cls: "bg-slate-100 text-slate-600",     bar: "bg-slate-400",    Icon: XCircle       },
+  sob_demanda:            { label: "Sob Demanda",          cls: "bg-blue-100 text-blue-800",       bar: "bg-blue-500",     Icon: Info          },
+} as const;
+
+// ─── Campo financeiro ─────────────────────────────────────────
+
+function Campo({ label, valor, cor = "", destaque = false, hideZero = false }: {
+  label: string; valor: number; cor?: string; destaque?: boolean; hideZero?: boolean;
+}) {
+  if (hideZero && Math.abs(valor) < 0.01) return null;
+  return (
+    <div className={`rounded-lg px-3 py-2 border ${destaque ? "border-primary/30 bg-primary/5" : "border-border/50 bg-background"}`}>
+      <p className="text-[10px] text-muted-foreground mb-0.5 leading-tight">{label}</p>
+      <p className={`text-sm font-semibold font-mono ${destaque ? "text-base" : ""} ${cor || "text-foreground"}`}>
+        {Math.abs(valor) < 0.01
+          ? <span className="text-muted-foreground/40">R$ 0,00</span>
+          : fmtBRL(valor)}
+      </p>
+    </div>
+  );
+}
+
+// ─── Detalhe expandido por pedido ────────────────────────────
+
+function DetalhesPedido({ item }: { item: any }) {
+  const bruto        = Number(item.valor_pdv ?? 0);
+  const descLoja     = Number(item.incentivo_loja ?? 0);
+  const fatPDV       = bruto - descLoja;
+  const taxas        = Number(item.taxas_comissoes ?? 0);
+  const incIfood     = Number(item.incentivo_ifood ?? 0);
+  const incRede      = Number(item.incentivo_rede ?? 0);
+  const txServ       = Number(item.taxa_servico ?? 0);
+  const txEntrega    = Number(item.valor_taxa_entrega ?? 0);
+  const liquido      = Number(item.valor_liquido ?? 0);
+  const comissao     = fatPDV - liquido;
+  const pctRepasse   = fatPDV > 0 ? Math.round(liquido / fatPDV * 100) : 0;
+  const status       = item.divergencia_tipo || "nenhuma";
+
+  return (
+    <div className="px-4 pb-4 pt-3 border-t bg-muted/10 space-y-4">
+
+      {/* PDV × iFood lado a lado */}
+      <div className="grid grid-cols-[1fr_44px_1fr] gap-3 items-start">
+
+        {/* LADO PDV */}
+        <div className="space-y-1.5">
+          <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 mb-2">
+            <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
+            PDV — caixa registrou
+          </p>
+          <Campo label="Total em Produtos (PDV)" valor={bruto} destaque />
+          {descLoja > 0 && (
+            <Campo label="Desconto loja (PDV)" valor={-descLoja} cor="text-amber-600" />
+          )}
+          <Campo label="Total faturado (PDV)" valor={fatPDV} cor="text-blue-700" />
+        </div>
+
+        {/* Centro */}
+        <div className="flex flex-col items-center justify-center pt-7 gap-1">
+          {status === "nenhuma" || status === "conciliado" ? (
+            <><Equal className="h-5 w-5 text-emerald-600" /><span className="text-[10px] text-emerald-600 font-medium">OK</span></>
+          ) : (
+            <><XCircle className="h-5 w-5 text-amber-500" /><span className="text-[10px] text-amber-600 font-medium">DIFF</span></>
+          )}
+          <ArrowRight className="h-3 w-3 text-muted-foreground mt-1" />
+        </div>
+
+        {/* LADO iFood */}
+        <div className="space-y-1.5">
+          <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 mb-2">
+            <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />
+            Extrato iFood
+          </p>
+          <Campo label="Valor dos itens (iFood)" valor={bruto} destaque />
+          <Campo label="Taxas e comissões" valor={taxas} cor="text-red-600" />
+          <Campo label="Incentivo iFood" valor={incIfood} cor="text-emerald-600" hideZero />
+          <Campo label="Incentivo loja" valor={descLoja} cor="text-amber-600" hideZero />
+          <Campo label="Incentivo rede" valor={incRede} cor="text-amber-600" hideZero />
+          <Campo label="Taxa de serviço" valor={txServ} cor="text-emerald-600" hideZero />
+          <Campo label="Taxa de entrega (retida)" valor={txEntrega} cor="text-muted-foreground" hideZero />
+        </div>
+      </div>
+
+      {/* Resultado */}
+      <div className="rounded-xl border-2 border-primary/20 bg-primary/5 p-3">
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <div>
+            <p className="text-[10px] text-muted-foreground mb-1">PDV esperava receber</p>
+            <p className="text-base font-bold text-blue-700">{fmtBRL(fatPDV)}</p>
+          </div>
+          <div className="border-x border-primary/20">
+            <p className="text-[10px] text-muted-foreground mb-1">Comissão iFood</p>
+            <p className="text-base font-bold text-red-600">− {fmtBRL(Math.abs(comissao))}</p>
+            {fatPDV > 0 && <p className="text-[10px] text-muted-foreground">{Math.round(Math.abs(comissao)/fatPDV*100)}% do bruto</p>}
+          </div>
+          <div>
+            <p className="text-[10px] text-muted-foreground mb-1">Vai entrar na conta</p>
+            <p className="text-base font-bold text-emerald-600">{fmtBRL(liquido)}</p>
+          </div>
+        </div>
+
+        {/* Barra */}
+        {fatPDV > 0 && (
+          <div className="mt-3">
+            <div className="flex h-3 rounded-full overflow-hidden bg-muted gap-0.5">
+              <div className="bg-emerald-500 rounded-l-full flex items-center justify-center"
+                style={{ width: `${Math.max(pctRepasse, 5)}%` }}>
+                {pctRepasse > 15 && <span className="text-[9px] text-white font-bold">{pctRepasse}%</span>}
+              </div>
+              <div className="bg-red-400 rounded-r-full flex items-center justify-center"
+                style={{ width: `${Math.min(100 - pctRepasse, 95)}%` }}>
+                {(100 - pctRepasse) > 8 && <span className="text-[9px] text-white font-bold">{100-pctRepasse}%</span>}
+              </div>
+            </div>
+            <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"/>Repasse ({pctRepasse}%)</span>
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block"/>Comissão iFood ({100-pctRepasse}%)</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Alerta divergência */}
+      {status !== "nenhuma" && status !== "conciliado" && (
+        <div className="flex gap-2 bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-800">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <span>{item.tratativa_observacao || `Divergência: ${status.replace(/_/g, " ")}`}</span>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1 border-t">
+        <span>📅 {item.data_transacao}</span>
+        <span>💳 {item.forma_pagamento || "—"}</span>
+        <span>🏪 {item.loja || "—"}</span>
+        <span className="font-mono">#{item.numero_pedido}</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Componente principal ─────────────────────────────────────
 
 export function ReconciliationDashboard() {
+  const { user } = useAuth();
   const [selectedMarcaKey, setSelectedMarcaKey] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
-  const [searchPedido, setSearchPedido] = useState("");
-  const [expandedPedido, setExpandedPedido] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [filtro, setFiltro] = useState("todos");
+  const [expandido, setExpandido] = useState<Set<string>>(new Set());
 
-  // Derive marca name and platformId from composite key "marca::platformId"
-  const selectedMarca = selectedMarcaKey ? selectedMarcaKey.split("::")[0] : "";
-  const selectedPlatformId = selectedMarcaKey ? selectedMarcaKey.split("::")[1] || "" : "";
-
-
-  // Fetch distinct marcas from DB with platform info — each marca+platform = separate option
+  // Marcas disponíveis
   const { data: marcaOptions = [] } = useQuery({
-    queryKey: ["reconciliation-marcas"],
+    queryKey: ["conciliacao-marcas", user?.id],
     queryFn: async () => {
-      const { data: items, error } = await supabase
+      const { data, error } = await supabase
         .from("statement_items")
-        .select("marca, loja, cnpj, import_id");
+        .select("marca, loja")
+        .eq("user_id", user!.id)
+        .eq("source_type", "extrato")
+        .not("marca", "is", null);
       if (error) throw error;
-
-      const importIds = [...new Set((items || []).map((i: any) => i.import_id))];
-      const { data: imports } = importIds.length > 0
-        ? await supabase.from("statement_imports").select("id, platform_id").in("id", importIds)
-        : { data: [] };
-      const importMap = new Map((imports || []).map((imp: any) => [imp.id, imp.platform_id]));
-
-      const { data: platforms } = await supabase.from("platforms").select("id, name");
-      const platformNameMap = new Map((platforms || []).map((p: any) => [p.id, p.name]));
-
-      // Key = marca + platformId so each combination is a separate option
-      const set = new Map<string, { marca: string; label: string; platformId: string }>();
-      (items || []).forEach((i: any) => {
-        const marca = i.marca || i.cnpj || "";
-        if (!marca) return;
-        const platformId = importMap.get(i.import_id) || "";
-        const platformName = platformNameMap.get(platformId) || "";
-        const compositeKey = `${marca}::${platformId}`;
-
-        if (!set.has(compositeKey)) {
-          const label = marca + (platformName ? ` — ${platformName}` : "") + (i.loja ? ` — ${i.loja}` : "");
-          set.set(compositeKey, { marca, label, platformId });
-        }
+      const set = new Map<string, string>();
+      (data || []).forEach((i: any) => {
+        if (i.marca) set.set(i.marca, i.loja || i.marca);
       });
-      return Array.from(set.entries()).map(([compositeKey, info]) => ({
-        value: compositeKey,
-        marca: info.marca,
-        label: info.label,
-        platformId: info.platformId,
+      return Array.from(set.entries()).map(([marca, loja]) => ({
+        value: marca, label: `${marca} — ${loja}`,
       }));
     },
+    enabled: !!user,
   });
 
-  // Fetch platform_ids from statement_items via their imports
-  const { data: importPlatforms = [] } = useQuery({
-    queryKey: ["import-platforms", selectedMarca],
-    queryFn: async () => {
-      if (!selectedMarca) return [];
-      // Get import_ids from statement_items for this marca
-      const { data: items, error: itemsErr } = await supabase
-        .from("statement_items")
-        .select("import_id")
-        .or(`marca.eq.${escapeFilterValue(selectedMarca)},cnpj.eq.${escapeFilterValue(selectedMarca)},loja.eq.${escapeFilterValue(selectedMarca)}`);
-      if (itemsErr) throw itemsErr;
-      const importIds = [...new Set((items || []).map((i: any) => i.import_id))];
-      if (importIds.length === 0) return [];
-      // Get platform_ids from those imports
-      const { data: imports, error: impErr } = await supabase
-        .from("statement_imports")
-        .select("platform_id")
-        .in("id", importIds);
-      if (impErr) throw impErr;
-      return [...new Set((imports || []).map((d: any) => d.platform_id))];
-    },
-    enabled: !!selectedMarca,
-  });
+  const selectedMarca = selectedMarcaKey;
 
-  // Fetch fee rules filtered by marca AND selected platform only (avoid duplication)
-  const { data: feeRules = [] } = useQuery({
-    queryKey: ["fee_rules_for_marca", selectedMarca, selectedPlatformId],
-    queryFn: async () => {
-      if (!selectedMarca || !selectedPlatformId) return [];
-      const { data, error } = await supabase
-        .from("fee_rules")
-        .select("*, platforms(name)")
-        .or(`marca.eq.${escapeFilterValue(selectedMarca)},marca.is.null`)
-        .eq("platform_id", selectedPlatformId)
-        .order("created_at");
-      if (error) throw error;
-      return (data || []) as any[];
-    },
-    enabled: !!selectedMarca && !!selectedPlatformId,
-  });
-
-  // Convert to FeeRule interface
-  const activeRules: FeeRule[] = useMemo(() => {
-    // Prefer marca-specific rules; if none exist, use generic (marca=null)
-    const specific = feeRules.filter((r: any) => r.marca === selectedMarca);
-    const generic = feeRules.filter((r: any) => !r.marca);
-    const rules = specific.length > 0 ? specific : generic;
-    return rules.map((r: any) => ({
-      name: r.name,
-      percentage: r.percentage,
-      fixed_amount: r.fixed_amount,
-      base_field: r.base_field || "LiqPDV",
-    }));
-  }, [feeRules, selectedMarca]);
-
-  // Fetch distinct dates for the selected marca
+  // Datas disponíveis para a marca
   const { data: dateOptions = [] } = useQuery({
-    queryKey: ["reconciliation-dates", selectedMarca],
+    queryKey: ["conciliacao-dates", selectedMarca],
     queryFn: async () => {
       if (!selectedMarca) return [];
       const { data, error } = await supabase
         .from("statement_items")
         .select("data_transacao")
-        .or(`marca.eq.${escapeFilterValue(selectedMarca)},cnpj.eq.${escapeFilterValue(selectedMarca)}`);
+        .eq("user_id", user!.id)
+        .eq("source_type", "extrato")
+        .eq("marca", selectedMarca);
       if (error) throw error;
-      const dates = [...new Set((data || []).map((i: any) => String(i.data_transacao)))].sort();
+      const dates = [...new Set((data || []).map((i: any) => String(i.data_transacao)))].sort().reverse();
       return dates;
     },
     enabled: !!selectedMarca,
-    // Auto-selecionar o dia mais recente quando as datas carregam
     onSuccess: (dates: string[]) => {
-      if (dates.length > 0 && !selectedDate) {
-        setSelectedDate(dates[dates.length - 1]);
-      }
+      if (dates.length > 0 && !selectedDate) setSelectedDate(dates[0]);
     },
   });
 
-  // Fetch items for the selected marca + date
-  const { data: rawDayItems = [] } = useQuery({
-    queryKey: ["reconciliation-day", selectedMarca, selectedDate],
+  // Itens do dia selecionado
+  const { data: items = [], isLoading } = useQuery({
+    queryKey: ["conciliacao-items", selectedMarca, selectedDate],
     queryFn: async () => {
       if (!selectedMarca || !selectedDate) return [];
       const { data, error } = await supabase
         .from("statement_items")
-        .select("*, statement_imports!inner(platform_id)")
-        .or(`marca.eq.${escapeFilterValue(selectedMarca)},cnpj.eq.${escapeFilterValue(selectedMarca)}`)
+        .select("*")
+        .eq("user_id", user!.id)
+        .eq("source_type", "extrato")
+        .eq("marca", selectedMarca)
         .eq("data_transacao", selectedDate)
         .order("numero_pedido");
       if (error) throw error;
@@ -169,704 +243,290 @@ export function ReconciliationDashboard() {
     enabled: !!selectedMarca && !!selectedDate,
   });
 
-  // Filter by platform from the selected marca key
-  const dayItems = useMemo(() => {
-    if (!selectedPlatformId) return rawDayItems;
-    return rawDayItems.filter((i: any) => i.statement_imports?.platform_id === selectedPlatformId);
-  }, [rawDayItems, selectedPlatformId]);
+  // Totais — mesma lógica do calcularResumo, sem recalcular
+  const totais = useMemo(() => {
+    const ativos = items.filter((i: any) => i.order_status !== "cancelado");
+    const cancelados = items.filter((i: any) => i.order_status === "cancelado");
+    const sum = (key: string, arr = ativos) =>
+      arr.reduce((s: number, i: any) => s + Number(i[key] ?? 0), 0);
 
-  // Separate PDV and Extrato items
-  const pdvItems = useMemo(() => dayItems.filter((i: any) => i.source_type === "pdv"), [dayItems]);
-  const extratoItems = useMemo(() => dayItems.filter((i: any) => i.source_type === "extrato"), [dayItems]);
-  const hasBothSources = pdvItems.length > 0 && extratoItems.length > 0;
-
-  // Cross-reference by numero_pedido
-  const crossRef = useMemo(() => {
-    if (!hasBothSources) return [];
-
-    const pdvMap = new Map<string, any>();
-    pdvItems.forEach((i: any) => {
-      if (i.numero_pedido) pdvMap.set(String(i.numero_pedido), i);
-    });
-
-    const extratoMapLocal = new Map<string, any>();
-    extratoItems.forEach((i: any) => {
-      if (i.numero_pedido) extratoMapLocal.set(String(i.numero_pedido), i);
-    });
-
-    const allPedidos = new Set([...pdvMap.keys(), ...extratoMapLocal.keys()]);
-    const results: any[] = [];
-
-    allPedidos.forEach((pedido) => {
-      const pdv = pdvMap.get(pedido);
-      const ext = extratoMapLocal.get(pedido);
-
-      const pdvLiq = pdv
-        ? calcularTotalLiquidoPDV(
-            Number(pdv.valor_pdv ?? 0),
-            Number(pdv.incentivo_loja ?? 0),
-            Number(pdv.taxas_comissoes ?? 0),
-            Number(pdv.valor_taxa_entrega ?? 0),
-            Number(pdv.desconto ?? 0),
-          )
-        : null;
-
-      const extLiq = ext ? Number(ext.valor_liquido ?? 0) : null;
-      const extTaxas = ext ? Number(ext.taxas_comissoes ?? 0) : null;
-      const extValorItens = ext ? Number(ext.valor_pdv ?? 0) : null;
-
-      const diff = pdvLiq != null && extLiq != null ? pdvLiq - extLiq : null;
-      let status: "ok" | "divergente" | "so_pdv" | "so_extrato" | "cancelado" = "ok";
-      if (!pdv) status = "so_extrato";
-      else if (!ext) status = "so_pdv";
-      else if (ext.descricao?.toUpperCase().includes("CANCELADO")) status = "cancelado";
-      else if (Math.abs(diff ?? 0) > 0.05) status = "divergente";
-
-      results.push({ pedido, pdv, ext, pdvLiq, extValorItens, extLiq, extTaxas, diff, status });
-    });
-
-    return results.sort((a, b) => {
-      const order = { divergente: 0, so_pdv: 1, so_extrato: 2, cancelado: 3, ok: 4 };
-      return (order[a.status] ?? 5) - (order[b.status] ?? 5);
-    });
-  }, [pdvItems, extratoItems, hasBothSources]);
-
-  const displayItems = useMemo(() => {
-    const items = pdvItems.length > 0 ? pdvItems : dayItems;
-    if (!searchPedido) return items;
-    return items.filter((i: any) =>
-      i.numero_pedido?.toLowerCase().includes(searchPedido.toLowerCase()),
-    );
-  }, [dayItems, pdvItems, searchPedido]);
-
-  const extratoMap = useMemo(() => {
-    const map = new Map<string, any>();
-    extratoItems.forEach((i: any) => {
-      if (i.numero_pedido) map.set(String(i.numero_pedido), i);
-    });
-    return map;
-  }, [extratoItems]);
-
-  const displayCrossRef = useMemo(() => {
-    if (!searchPedido) return crossRef;
-    return crossRef.filter((r) =>
-      r.pedido.toLowerCase().includes(searchPedido.toLowerCase()),
-    );
-  }, [crossRef, searchPedido]);
-
-  const totals = useMemo(() => {
-    const sourceItems = pdvItems.length > 0 ? pdvItems : dayItems;
-    const activeItems = sourceItems.filter((i: any) => !isCancelado(i));
-    const cancelados = sourceItems.filter((i: any) => isCancelado(i));
-    const sum = (key: string, items: any[] = activeItems) => items.reduce((s: number, i: any) => s + Number(i[key] ?? 0), 0);
-    const valorItens = sum("valor_pdv");
-    const incentivoLoja = sum("incentivo_loja");
-    const taxasComissoes = sum("taxas_comissoes");
-    const taxaEntrega = sum("valor_taxa_entrega");
-    const desconto = sum("desconto");
-    // Soma por pedido para respeitar o Math.max(0, entrega - desconto) de cada item individualmente
-    const totalLiquido = activeItems.reduce((s: number, i: any) =>
-      s + calcularTotalLiquidoPDV(
-        Number(i.valor_pdv ?? 0), Number(i.incentivo_loja ?? 0),
-        Number(i.taxas_comissoes ?? 0), Number(i.valor_taxa_entrega ?? 0),
-        Number(i.desconto ?? 0)
-      ), 0);
-    const valorBruto = sum("valor_bruto");
-    const baseValues: BaseValues = { LiqPDV: totalLiquido, ValorItens: valorItens, ValorBruto: valorBruto };
-    const { deductions, conciliado } = aplicarRegras(baseValues, activeRules);
-
-    // Cancelled totals
-    const canceladoLiq = cancelados.reduce((s: number, i: any) => s + calcularTotalLiquidoPDV(
-      Number(i.valor_pdv ?? 0), Number(i.incentivo_loja ?? 0), Number(i.taxas_comissoes ?? 0),
-      Number(i.valor_taxa_entrega ?? 0), Number(i.desconto ?? 0)
-    ), 0);
+    const bruto   = sum("valor_pdv");
+    const liquido = sum("valor_liquido");
+    const conciliados = ativos.filter((i: any) =>
+      !i.divergencia_tipo || i.divergencia_tipo === "nenhuma"
+    ).length;
 
     return {
-      valorItens, incentivoLoja, taxasComissoes,
-      incentivoIfood: sum("incentivo_ifood"),
-      taxaServico: sum("taxa_servico"),
-      taxaEntrega, desconto,
-      liquidoPlataforma: sum("valor_liquido"),
-      totalLiquido, pedidos: activeItems.length,
-      cancelados: cancelados.length, canceladoLiq,
-      totalPedidos: sourceItems.length,
-      extratoLiquido: sum("valor_liquido", extratoItems),
-      extratoTaxas: sum("taxas_comissoes", extratoItems),
-      extratoTaxasTotal: hasBothSources ? sum("taxas_comissoes", extratoItems) : sum("taxas_comissoes", activeItems),
-      conciliarTotal: (() => {
-        const src = hasBothSources ? extratoItems : activeItems;
-        return src.reduce((s: number, i: any) => s + calcularConciliar(
-          Number(i.valor_pdv ?? 0), Number(i.taxas_comissoes ?? 0),
-          Number(i.incentivo_ifood ?? 0), Number(i.incentivo_loja ?? 0),
-          Number(i.incentivo_rede ?? 0), Number(i.taxa_servico ?? 0),
-          Number(i.valor_taxa_entrega ?? 0), Number(i.desconto ?? 0),
-        ), 0);
-      })(),
-      extratoPedidos: extratoItems.length,
-      deductions, conciliado,
+      total: items.length,
+      ativos: ativos.length,
+      cancelados: cancelados.length,
+      conciliados,
+      divergentes: ativos.filter((i: any) =>
+        i.divergencia_tipo && i.divergencia_tipo !== "nenhuma"
+      ).length,
+      bruto,
+      liquido,
+      comissao: bruto - liquido,
+      taxas:       sum("taxas_comissoes"),
+      incIfood:    sum("incentivo_ifood"),
+      incLoja:     sum("incentivo_loja"),
+      txServico:   sum("taxa_servico"),
+      txEntrega:   sum("valor_taxa_entrega"),
+      pct: ativos.length ? Math.round(conciliados / ativos.length * 100) : 0,
+      valCancelado: cancelados.reduce((s: number, i: any) => s + Number(i.valor_pdv ?? 0), 0),
     };
-  }, [dayItems, pdvItems, extratoItems, activeRules]);
+  }, [items]);
 
-  const crossRefSummary = useMemo(() => {
-    const ok = crossRef.filter((r) => r.status === "ok").length;
-    const divergente = crossRef.filter((r) => r.status === "divergente").length;
-    const soPdv = crossRef.filter((r) => r.status === "so_pdv").length;
-    const soExtrato = crossRef.filter((r) => r.status === "so_extrato").length;
-    const cancelado = crossRef.filter((r) => r.status === "cancelado").length;
-    return { ok, divergente, soPdv, soExtrato, cancelado, total: crossRef.length };
-  }, [crossRef]);
+  // Filtros
+  const itensFiltrados = useMemo(() => {
+    let list = items as any[];
+    if (filtro === "divergencias") list = list.filter(i => i.divergencia_tipo && i.divergencia_tipo !== "nenhuma");
+    else if (filtro === "conciliado") list = list.filter(i => !i.divergencia_tipo || i.divergencia_tipo === "nenhuma");
+    else if (filtro === "cancelado") list = list.filter(i => i.order_status === "cancelado");
+    if (search) list = list.filter(i =>
+      String(i.numero_pedido || "").includes(search) ||
+      String(i.loja || "").toLowerCase().includes(search.toLowerCase())
+    );
+    // Divergências primeiro
+    return [...list].sort((a, b) => {
+      const hasA = a.divergencia_tipo && a.divergencia_tipo !== "nenhuma" ? 0 : 1;
+      const hasB = b.divergencia_tipo && b.divergencia_tipo !== "nenhuma" ? 0 : 1;
+      return hasA - hasB;
+    });
+  }, [items, filtro, search]);
 
-  const statusBadge = (status: string) => {
-    switch (status) {
-      case "ok": return <Badge className="bg-green-500/15 text-green-700 border-green-200 text-[10px]"><CheckCircle2 className="h-3 w-3 mr-0.5" />OK</Badge>;
-      case "divergente": return <Badge variant="destructive" className="text-[10px]"><XCircle className="h-3 w-3 mr-0.5" />Divergente</Badge>;
-      case "so_pdv": return <Badge variant="outline" className="text-[10px]">Só PDV</Badge>;
-      case "so_extrato": return <Badge variant="outline" className="text-[10px]">Só Extrato</Badge>;
-      case "cancelado": return <Badge variant="secondary" className="text-[10px]">Cancelado</Badge>;
-      default: return null;
-    }
-  };
+  const toggleExpand = (id: string) =>
+    setExpandido(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
-  const hasRules = activeRules.length > 0;
+  // ── RENDER ─────────────────────────────────────────────────
 
   return (
     <div className="space-y-4">
-      {/* Selectors */}
+
+      {/* Filtros */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <CardContent className="pt-4 pb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <Label className="text-xs font-medium text-muted-foreground">Marca</Label>
-              <Select value={selectedMarcaKey} onValueChange={(v) => { setSelectedMarcaKey(v); setSelectedDate("") /* datas vão carregar e auto-selecionar o mais recente */; }}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <p className="text-xs text-muted-foreground mb-1.5">Marca</p>
+              <Select value={selectedMarcaKey} onValueChange={v => { setSelectedMarcaKey(v); setSelectedDate(""); }}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  {marcaOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
+                  {marcaOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-xs font-medium text-muted-foreground">Dia</Label>
+              <p className="text-xs text-muted-foreground mb-1.5">Dia</p>
               <Select value={selectedDate} onValueChange={setSelectedDate} disabled={!selectedMarca}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  {dateOptions.map((d) => (
-                    <SelectItem key={d} value={d}>{fmtDate(d)}</SelectItem>
-                  ))}
+                  {dateOptions.map(d => {
+                    const [y, m, day] = d.split("-");
+                    return <SelectItem key={d} value={d}>{`${day}/${m}/${y}`}</SelectItem>;
+                  })}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-xs font-medium text-muted-foreground">Buscar Pedido</Label>
-              <div className="relative mt-1">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Nº pedido..." value={searchPedido} onChange={(e) => setSearchPedido(e.target.value)} className="pl-8" />
+              <p className="text-xs text-muted-foreground mb-1.5">Buscar pedido</p>
+              <div className="relative">
+                <Input placeholder="Nº pedido..." value={search} onChange={e => setSearch(e.target.value)}
+                  className="h-9 pl-3" />
               </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Main result */}
-      {selectedDate && dayItems.length > 0 && (
-        <Tabs defaultValue="conciliacao" className="space-y-4">
-          <TabsList className="h-9">
-            <TabsTrigger value="conciliacao" className="text-xs">Conciliação</TabsTrigger>
-            <TabsTrigger value="regras" className="text-xs">
-              <BookOpen className="h-3.5 w-3.5 mr-1" />
-              Regras {hasRules ? `(${activeRules.length})` : ""}
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="conciliacao" className="space-y-4">
-          {/* Hero value */}
-          <Card className="border-2 border-primary overflow-hidden">
-            <div className="bg-primary/10 px-6 py-8 text-center">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <Receipt className="h-5 w-5 text-primary" />
-                <p className="text-sm font-semibold text-primary uppercase tracking-wider">
-                  Total Líquido para Lançamento no PDV
-                </p>
-              </div>
-              <p className="text-5xl font-black text-primary tabular-nums">
-                {fmt(totals.totalLiquido)}
-              </p>
-              <div className="flex items-center justify-center gap-3 mt-3 text-xs text-muted-foreground flex-wrap">
-                <Badge variant="secondary">{totals.pedidos} pedido(s) ativos</Badge>
-                {totals.cancelados > 0 && (
-                  <Badge variant="destructive" className="text-[10px]">
-                    <XCircle className="h-3 w-3 mr-0.5" />
-                    {totals.cancelados} cancelado(s) — {fmt(totals.canceladoLiq)} excluído(s)
-                  </Badge>
-                )}
-                {hasBothSources && <Badge variant="outline">{totals.extratoPedidos} no extrato</Badge>}
-                <span>{fmtDate(selectedDate)}</span>
-                <span>{selectedMarca}</span>
-              </div>
-            </div>
-
-            <CardContent className="py-4">
-              <div className="grid grid-cols-5 gap-4 text-center text-sm">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Valor dos Itens</p>
-                  <p className="font-bold text-lg">{fmt(totals.valorItens)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Inc. Loja</p>
-                  <p className="font-bold text-lg text-amber-600">{fmt(totals.incentivoLoja)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Taxas/Com.</p>
-                  <p className="font-bold text-lg text-destructive">{fmt(totals.taxasComissoes)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Tx Entrega</p>
-                  <p className="font-bold text-lg">{fmt(totals.taxaEntrega)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Desconto</p>
-                  <p className="font-bold text-lg text-destructive">-{fmt(totals.desconto)}</p>
-                </div>
-              </div>
-
-              {/* Dynamic rules deductions */}
-              {hasRules && (
-                <div className="border-t mt-3 pt-3">
-                  <p className="text-xs text-muted-foreground mb-2 font-semibold">📐 Conciliação por Regras</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-sm">
-                    {totals.deductions.map((d, idx) => (
-                      <div key={idx}>
-                        <p className="text-xs text-muted-foreground mb-1">{d.name}</p>
-                        <p className="font-bold text-destructive">{fmt(d.value)}</p>
-                      </div>
-                    ))}
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1 font-semibold">Conc. Manutenção</p>
-                      <p className="font-bold text-lg text-green-700">{fmt(totals.conciliado)}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Extrato-based conciliation — always visible */}
-              <div className="border-t mt-3 pt-3">
-                <p className="text-xs text-muted-foreground mb-2 font-semibold">📋 Conciliação pelo Extrato</p>
-                <div className="grid grid-cols-3 gap-3 text-center text-sm">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Líq. PDV</p>
-                    <p className="font-bold text-lg text-primary">{fmt(totals.totalLiquido)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Taxas Extrato</p>
-                    <p className="font-bold text-lg text-destructive">{fmt(totals.extratoTaxasTotal)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1 font-semibold">Conciliar</p>
-                    <p className="font-bold text-lg text-green-700">{fmt(totals.conciliarTotal)}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Incentivo iFood e Taxa Serviço — aparecem quando há dados do extrato */}
-              {(totals.incentivoIfood !== 0 || totals.taxaServico !== 0) && (
-                <div className="grid grid-cols-2 gap-4 text-center text-sm mt-3 pt-3 border-t">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Incentivo iFood</p>
-                    <p className="font-bold text-lg text-emerald-600">+{fmt(totals.incentivoIfood)}</p>
-                    <p className="text-[10px] text-muted-foreground">subsídio da plataforma</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Taxa de Serviço</p>
-                    <p className="font-bold text-lg text-emerald-600">+{fmt(totals.taxaServico)}</p>
-                    <p className="text-[10px] text-muted-foreground">repasse ao restaurante</p>
-                  </div>
-                </div>
-              )}
-
-              <p className="text-xs text-muted-foreground text-center mt-3 border-t pt-3">
-                Itens {fmt(totals.valorItens)} + Inc. Loja {fmt(totals.incentivoLoja)} + Com. {fmt(totals.taxasComissoes)} + Entrega {fmt(totals.taxaEntrega)} − Desc. {fmt(totals.desconto)} = <strong className="text-primary">{fmt(totals.totalLiquido)}</strong>
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Cross-reference summary when both sources exist */}
-          {hasBothSources && (
-            <Card className="border-2 border-accent overflow-hidden">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <ArrowRightLeft className="h-4 w-4" />
-                  Conciliação PDV ↔ Extrato iFood
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
-                  <div className="rounded-lg bg-green-500/10 p-3 text-center">
-                    <p className="text-2xl font-bold text-green-700">{crossRefSummary.ok}</p>
-                    <p className="text-xs text-muted-foreground">Conferidos ✅</p>
-                  </div>
-                  <div className="rounded-lg bg-destructive/10 p-3 text-center">
-                    <p className="text-2xl font-bold text-destructive">{crossRefSummary.divergente}</p>
-                    <p className="text-xs text-muted-foreground">Divergentes ❌</p>
-                  </div>
-                  <div className="rounded-lg bg-muted p-3 text-center">
-                    <p className="text-2xl font-bold">{crossRefSummary.soPdv}</p>
-                    <p className="text-xs text-muted-foreground">Só no PDV</p>
-                  </div>
-                  <div className="rounded-lg bg-muted p-3 text-center">
-                    <p className="text-2xl font-bold">{crossRefSummary.soExtrato}</p>
-                    <p className="text-xs text-muted-foreground">Só no Extrato</p>
-                  </div>
-                  <div className="rounded-lg bg-muted p-3 text-center">
-                    <p className="text-2xl font-bold">{crossRefSummary.cancelado}</p>
-                    <p className="text-xs text-muted-foreground">Cancelados</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-center border-t pt-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Líq. PDV Total</p>
-                    <p className="font-bold text-lg text-primary">{fmt(totals.totalLiquido)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Líq. Extrato iFood</p>
-                    <p className="font-bold text-lg">{fmt(totals.extratoLiquido)}</p>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground text-center mt-2">
-                  Diferença (taxas iFood): <strong className="text-destructive">{fmt(totals.totalLiquido - totals.extratoLiquido)}</strong>
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Other values (secondary) */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label: "Líquido Plataforma", value: totals.liquidoPlataforma },
-              { label: "Inc. iFood", value: totals.incentivoIfood },
-              { label: "Taxa Serviço", value: totals.taxaServico },
-              { label: "Tx Entrega Cliente", value: totals.taxaEntrega },
-            ].map((c) => (
-              <Card key={c.label}>
-                <CardContent className="py-3 px-4">
-                  <p className="text-xs text-muted-foreground">{c.label}</p>
-                  <p className="font-semibold">{fmt(c.value)}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {/* Detail tables */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center justify-between">
-                Pedidos do Dia
-                {searchPedido && <span className="text-xs font-normal text-muted-foreground">{displayItems.length} resultado(s)</span>}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-               <div className="overflow-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs">Pedido</TableHead>
-                        <TableHead className="text-xs text-right">Valor Itens</TableHead>
-                        <TableHead className="text-xs text-right">Inc. Loja</TableHead>
-                        <TableHead className="text-xs text-right">Taxas/Com.</TableHead>
-                        <TableHead className="text-xs text-right">Tx Entrega</TableHead>
-                        <TableHead className="text-xs text-right">Desconto</TableHead>
-                        <TableHead className="text-xs text-right font-bold bg-primary/5">Líq. PDV</TableHead>
-                        {activeRules.map((rule, idx) => (
-                          <TableHead key={idx} className="text-xs text-right text-destructive">{rule.name}</TableHead>
-                        ))}
-                        {hasRules && <TableHead className="text-xs text-right font-bold bg-green-500/10">Conc. Manutenção</TableHead>}
-                        <TableHead className="text-xs text-right text-destructive font-bold bg-destructive/5">Taxas Extrato</TableHead>
-                        <TableHead className="text-xs text-right font-bold bg-green-500/10">Conciliar</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {displayItems.map((item: any) => {
-                        const cancelled = isCancelado(item);
-                        const valorItensItem = Number(item.valor_pdv ?? 0);
-                        const incLoja = Number(item.incentivo_loja ?? 0);
-                        const taxCom = Number(item.taxas_comissoes ?? 0);
-                        const txEntrega = Number(item.valor_taxa_entrega ?? 0);
-                        const desc = Number(item.desconto ?? 0);
-                        const liq = calcularTotalLiquidoPDV(valorItensItem, incLoja, taxCom, txEntrega, desc);
-                        const itemBaseValues: BaseValues = { LiqPDV: liq, ValorItens: valorItensItem, ValorBruto: Number(item.valor_bruto ?? 0) };
-                        const { deductions, conciliado } = aplicarRegras(itemBaseValues, activeRules);
-                        const ext = extratoMap.get(String(item.numero_pedido));
-                        const extTaxas = ext ? Number(ext.taxas_comissoes ?? 0) : Number(item.taxas_comissoes ?? 0);
-                        // Conciliar = fórmula completa que reproduz o valor líquido do iFood
-                        const src = ext || item;
-                        const extConciliado = calcularConciliar(
-                          Number(src.valor_pdv ?? 0),
-                          Number(src.taxas_comissoes ?? 0),
-                          Number(src.incentivo_ifood ?? 0),
-                          Number(src.incentivo_loja ?? 0),
-                          Number(src.incentivo_rede ?? 0),
-                          Number(src.taxa_servico ?? 0),
-                          Number(src.valor_taxa_entrega ?? 0),
-                          Number(src.desconto ?? 0),
-                        );
-                        const rowClass = cancelled ? "opacity-50 line-through bg-destructive/5" : "cursor-pointer hover:bg-accent/50";
-                        const isExpanded = expandedPedido === item.numero_pedido;
-
-                        return (
-                          <>
-                          <TableRow key={item.id} className={rowClass} onClick={() => setExpandedPedido(isExpanded ? null : item.numero_pedido)}>
-                            <TableCell className="text-xs font-mono">
-                              <span className="flex items-center gap-1">
-                                {isExpanded ? "▼" : "▶"} {item.numero_pedido || "—"}
-                                {cancelled && <Badge variant="destructive" className="text-[8px] px-1 py-0 no-underline">Cancelado</Badge>}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-xs text-right">{fmt(valorItensItem)}</TableCell>
-                            <TableCell className="text-xs text-right text-destructive">{fmt(incLoja)}</TableCell>
-                            <TableCell className="text-xs text-right text-destructive">{fmt(taxCom)}</TableCell>
-                            <TableCell className="text-xs text-right">{fmt(txEntrega)}</TableCell>
-                            <TableCell className="text-xs text-right text-destructive">-{fmt(desc)}</TableCell>
-                            <TableCell className="text-xs text-right font-bold text-primary bg-primary/5">{fmt(liq)}</TableCell>
-                            {deductions.map((d, idx) => (
-                              <TableCell key={idx} className="text-xs text-right text-destructive font-medium">{fmt(d.value)}</TableCell>
-                            ))}
-                            {hasRules && <TableCell className="text-xs text-right font-bold bg-green-500/10 text-green-700">{fmt(conciliado)}</TableCell>}
-                            <TableCell className="text-xs text-right text-destructive font-medium bg-destructive/5">
-                              {fmt(extTaxas)}
-                            </TableCell>
-                            <TableCell className="text-xs text-right font-bold bg-green-500/10 text-green-700">
-                              {fmt(extConciliado)}
-                            </TableCell>
-                          </TableRow>
-                          {isExpanded && (
-                            <TableRow key={`${item.id}-detail`} className="bg-muted/30">
-                              <TableCell colSpan={7 + activeRules.length + (hasRules ? 1 : 0) + 2} className="p-4">
-                                <div className="space-y-3">
-                                  <p className="text-sm font-semibold flex items-center gap-2">
-                                    <Calculator className="h-4 w-4" />
-                                    Memória de Cálculo — Pedido {item.numero_pedido}
-                                  </p>
-
-                                  {/* All raw fields */}
-                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                                    <div className="rounded border bg-background p-2">
-                                      <span className="text-muted-foreground">Valor dos Itens</span>
-                                      <p className="font-bold">{fmt(valorItensItem)}</p>
-                                    </div>
-                                    <div className="rounded border bg-background p-2">
-                                      <span className="text-muted-foreground">Valor Bruto</span>
-                                      <p className="font-bold">{fmt(Number(item.valor_bruto ?? 0))}</p>
-                                    </div>
-                                    <div className="rounded border bg-background p-2">
-                                      <span className="text-muted-foreground">Incentivo Loja</span>
-                                      <p className="font-bold text-destructive">{fmt(incLoja)}</p>
-                                    </div>
-                                    <div className="rounded border bg-background p-2">
-                                      <span className="text-muted-foreground">Incentivo iFood</span>
-                                      <p className="font-bold">{fmt(Number(item.incentivo_ifood ?? 0))}</p>
-                                    </div>
-                                    <div className="rounded border bg-background p-2">
-                                      <span className="text-muted-foreground">Incentivo Rede</span>
-                                      <p className="font-bold">{fmt(Number(item.incentivo_rede ?? 0))}</p>
-                                    </div>
-                                    <div className="rounded border bg-background p-2">
-                                      <span className="text-muted-foreground">Taxa de Serviço</span>
-                                      <p className="font-bold">{fmt(Number(item.taxa_servico ?? 0))}</p>
-                                    </div>
-                                    <div className="rounded border bg-background p-2">
-                                      <span className="text-muted-foreground">Taxas e Comissões</span>
-                                      <p className="font-bold text-destructive">{fmt(taxCom)}</p>
-                                    </div>
-                                    <div className="rounded border bg-background p-2">
-                                      <span className="text-muted-foreground">Taxa Entrega</span>
-                                      <p className="font-bold">{fmt(txEntrega)}</p>
-                                    </div>
-                                    <div className="rounded border bg-background p-2">
-                                      <span className="text-muted-foreground">Desconto</span>
-                                      <p className="font-bold text-destructive">-{fmt(desc)}</p>
-                                    </div>
-                                    <div className="rounded border bg-background p-2">
-                                      <span className="text-muted-foreground">Valor Líquido (Extrato)</span>
-                                      <p className="font-bold">{fmt(Number(item.valor_liquido ?? 0))}</p>
-                                    </div>
-                                  </div>
-
-                                  {/* Step-by-step formula */}
-                                  <div className="rounded border bg-background p-3 space-y-1 font-mono text-xs">
-                                    <p className="font-semibold text-sm mb-2 font-sans">Fórmula Líq. PDV:</p>
-                                    <div className="grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-0.5 items-center">
-                                      <span></span><span>Valor dos Itens</span><span className="text-right font-bold">{fmt(valorItensItem)}</span>
-                                      <span className="text-destructive">+</span><span>Incentivo Loja</span><span className="text-right text-destructive">{fmt(incLoja)}</span>
-                                      <span className="text-destructive">+</span><span>Taxas e Comissões</span><span className="text-right text-destructive">{fmt(taxCom)}</span>
-                                      <span>+</span><span>Taxa Entrega</span><span className="text-right">{fmt(txEntrega)}</span>
-                                      <span className="text-destructive">−</span><span>Desconto</span><span className="text-right text-destructive">{fmt(desc)}</span>
-                                      {txEntrega > 0 && desc > 0 && (
-                                        <>
-                                          <span></span>
-                                          <span className="text-muted-foreground italic">Entrega líquida: max(0, {fmt(txEntrega)} − {fmt(desc)}) = {fmt(Math.max(0, txEntrega - desc))}</span>
-                                          <span></span>
-                                        </>
-                                      )}
-                                    </div>
-                                    <div className="border-t pt-1 mt-1 flex justify-between font-bold text-primary">
-                                      <span>= Líq. PDV</span>
-                                      <span>{fmt(liq)}</span>
-                                    </div>
-                                  </div>
-
-                                  {/* Fee rules breakdown */}
-                                  {hasRules && (
-                                    <div className="rounded border bg-background p-3 space-y-1 font-mono text-xs">
-                                      <p className="font-semibold text-sm mb-2 font-sans">Regras de Conciliação:</p>
-                                      <div className="grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-0.5 items-center">
-                                        <span></span><span>Líq. PDV</span><span className="text-right font-bold">{fmt(liq)}</span>
-                                        {deductions.map((d, idx) => {
-                                          const rule = activeRules[idx];
-                                          const base = itemBaseValues[rule.base_field] ?? liq;
-                                          return (
-                                            <React.Fragment key={idx}>
-                                              <span className="text-destructive">−</span>
-                                              <span>{d.name} {rule.percentage != null ? `(${Math.abs(rule.percentage)}% de {fmt(base)})` : ""}{rule.fixed_amount != null ? ` + fixo ${fmt(Math.abs(rule.fixed_amount))}` : ""}</span>
-                                              <span className="text-right text-destructive">{fmt(d.value)}</span>
-                                            </React.Fragment>
-                                          );
-                                        })}
-                                      </div>
-                                      <div className="border-t pt-1 mt-1 flex justify-between font-bold text-green-700">
-                                        <span>= Conc. Manutenção</span>
-                                        <span>{fmt(conciliado)}</span>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Extrato conciliation */}
-                                   <div className="rounded border bg-background p-3 space-y-1 font-mono text-xs">
-                                    <p className="font-semibold text-sm mb-2 font-sans">Conciliação pelo Extrato:</p>
-                                    <div className="grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-0.5 items-center">
-                                      <span></span><span>Valor dos Itens</span><span className="text-right font-bold">{fmt(ext ? Number(ext.valor_pdv ?? valorItensItem) : valorItensItem)}</span>
-                                      <span className="text-destructive">+</span><span>Taxas e Comissões (Extrato)</span><span className="text-right text-destructive">{fmt(extTaxas)}</span>
-                                      <span>+</span><span>Incentivo iFood</span><span className="text-right">{fmt(ext ? Number(ext.incentivo_ifood ?? 0) : Number(item.incentivo_ifood ?? 0))}</span>
-                                      <span className="text-destructive">−</span><span>Incentivo Loja</span><span className="text-right text-destructive">{fmt(ext ? Number(ext.incentivo_loja ?? 0) : Number(item.incentivo_loja ?? 0))}</span>
-                                      <span>+</span><span>Taxa Entrega</span><span className="text-right">{fmt(ext ? Number(ext.valor_taxa_entrega ?? 0) : Number(item.valor_taxa_entrega ?? 0))}</span>
-                                      <span>+</span><span>Taxa Serviço</span><span className="text-right">{fmt(ext ? Number(ext.taxa_servico ?? 0) : Number(item.taxa_servico ?? 0))}</span>
-                                    </div>
-                                    <div className="border-t pt-1 mt-1 flex justify-between font-bold text-green-700">
-                                      <span>= Conciliar</span>
-                                      <span>{fmt(extConciliado)}</span>
-                                    </div>
-                                    <p className="text-muted-foreground italic mt-1 font-sans text-[10px]">
-                                      Fórmula: Valor Itens + Taxas/Com. + Inc. iFood + Inc. Loja + Inc. Rede + Tx Serviço + Tx Entrega − Desconto
-                                    </p>
-                                  </div>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          )}
-                          </>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-            </CardContent>
-          </Card>
-          </TabsContent>
-
-          <TabsContent value="regras">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base font-semibold">
-                  {selectedMarca}
-                </CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  {hasRules
-                    ? `${activeRules.length} regra(s) de conciliação configurada(s) para esta marca`
-                    : "Nenhuma regra configurada. Cadastre regras na aba \"Taxas\" do menu."}
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {hasRules ? (
-                  <>
-                    <div className="overflow-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-xs">#</TableHead>
-                            <TableHead className="text-xs">Regra</TableHead>
-                            <TableHead className="text-xs">Base</TableHead>
-                            <TableHead className="text-xs text-right">Percentual</TableHead>
-                            <TableHead className="text-xs text-right">Valor Fixo</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {activeRules.map((rule, idx) => (
-                            <TableRow key={idx}>
-                              <TableCell className="text-xs font-mono">{idx + 1}</TableCell>
-                              <TableCell className="text-xs font-medium">{rule.name}</TableCell>
-                              <TableCell className="text-xs font-mono">{rule.base_field}</TableCell>
-                              <TableCell className="text-xs text-right">
-                                {rule.percentage != null ? `${rule.percentage}%` : "—"}
-                              </TableCell>
-                              <TableCell className="text-xs text-right">
-                                {rule.fixed_amount != null ? fmt(rule.fixed_amount) : "—"}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          <TableRow className="bg-green-500/5">
-                            <TableCell className="text-xs font-mono">{activeRules.length + 1}</TableCell>
-                            <TableCell className="text-xs font-bold">Conciliado</TableCell>
-                            <TableCell className="text-xs font-mono">LiqPDV</TableCell>
-                            <TableCell className="text-xs text-right font-bold" colSpan={2}>
-                              Líq. PDV {activeRules.map(r => {
-                                if (r.percentage != null) return ` ${r.percentage > 0 ? '+' : ''}${r.percentage}%`;
-                                if (r.fixed_amount != null) return ` ${r.fixed_amount > 0 ? '+' : ''}${fmt(r.fixed_amount)}`;
-                                return '';
-                              }).join('')}
-                            </TableCell>
-                          </TableRow>
-                        </TableBody>
-                      </Table>
-                    </div>
-
-                    <div className="rounded-lg border bg-muted/30 p-4">
-                      <p className="text-xs font-medium mb-2">📋 Resumo da fórmula</p>
-                      <code className="text-xs block bg-background rounded p-3 border">
-                        Conciliado = Líq. PDV{activeRules.map(r => {
-                          if (r.percentage != null) return ` ${r.percentage > 0 ? '+' : '−'} (Líq. PDV × ${Math.abs(r.percentage)}%)`;
-                          if (r.fixed_amount != null) return ` ${r.fixed_amount > 0 ? '+' : '−'} ${fmt(Math.abs(r.fixed_amount))}`;
-                          return '';
-                        }).join('')}
-                      </code>
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground text-sm">
-                    <BookOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    Nenhuma regra cadastrada para esta marca. Vá em "Taxas" no menu lateral para criar regras.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+      {/* Estado vazio */}
+      {!selectedMarca && (
+        <div className="text-center py-16 text-muted-foreground">
+          <p className="text-sm">Selecione uma marca para ver a conciliação.</p>
+        </div>
       )}
 
       {selectedMarca && !selectedDate && (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground text-sm">
-            Selecione um dia para visualizar a conciliação.
-          </CardContent>
-        </Card>
+        <div className="text-center py-16 text-muted-foreground">
+          <p className="text-sm">Selecione um dia para visualizar.</p>
+        </div>
       )}
 
-      {!selectedMarca && (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground text-sm">
-            <Calculator className="h-8 w-8 mx-auto mb-2 opacity-50" />
-            Selecione uma marca/CNPJ e o dia para calcular o valor de lançamento no PDV.
-          </CardContent>
-        </Card>
+      {/* Dados */}
+      {selectedMarca && selectedDate && !isLoading && items.length === 0 && (
+        <div className="text-center py-16 text-muted-foreground">
+          <p className="text-sm">Nenhum registro encontrado para {selectedMarca} em {selectedDate}.</p>
+          <p className="text-xs mt-1">Importe os arquivos na aba Importar primeiro.</p>
+        </div>
+      )}
+
+      {selectedDate && items.length > 0 && (
+        <>
+          {/* KPIs — idênticos ao preview do import */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Card className={totais.pct === 100 ? "border-emerald-300 bg-emerald-50/50" : ""}>
+              <CardContent className="pt-4 pb-3">
+                <p className="text-xs text-muted-foreground">Conciliados</p>
+                <p className={`text-2xl font-bold mt-0.5 ${totais.pct === 100 ? "text-emerald-600" : "text-amber-600"}`}>
+                  {totais.pct}%
+                </p>
+                <p className="text-xs text-muted-foreground">{totais.conciliados} de {totais.ativos} · {selectedMarca}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <p className="text-xs text-muted-foreground">Total bruto (itens)</p>
+                <p className="text-xl font-bold mt-0.5">{fmtBRL(totais.bruto)}</p>
+                <p className="text-xs text-muted-foreground">{totais.ativos} pedidos ativos</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <p className="text-xs text-muted-foreground">Comissão iFood</p>
+                <p className="text-xl font-bold text-red-600 mt-0.5">
+                  − {fmtBRL(Math.abs(totais.comissao))}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {totais.bruto > 0 ? `${Math.round(Math.abs(totais.comissao)/totais.bruto*100)}% do bruto` : "—"}
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="border-primary/30">
+              <CardContent className="pt-4 pb-3">
+                <p className="text-xs text-muted-foreground">Repasse iFood</p>
+                <p className="text-xl font-bold text-primary mt-0.5">{fmtBRL(totais.liquido)}</p>
+                <p className="text-xs text-muted-foreground">entra na conta</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Campos iFood discriminados */}
+          {(totais.incIfood !== 0 || totais.txServico !== 0 || totais.cancelados > 0) && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {totais.incIfood !== 0 && (
+                <Card><CardContent className="pt-3 pb-3">
+                  <p className="text-xs text-muted-foreground">Incentivo iFood</p>
+                  <p className="text-lg font-bold text-emerald-600">+{fmtBRL(totais.incIfood)}</p>
+                  <p className="text-xs text-muted-foreground">subsídio plataforma</p>
+                </CardContent></Card>
+              )}
+              {totais.incLoja !== 0 && (
+                <Card><CardContent className="pt-3 pb-3">
+                  <p className="text-xs text-muted-foreground">Incentivo loja</p>
+                  <p className="text-lg font-bold text-amber-600">−{fmtBRL(totais.incLoja)}</p>
+                  <p className="text-xs text-muted-foreground">custo bancado pela loja</p>
+                </CardContent></Card>
+              )}
+              {totais.txServico !== 0 && (
+                <Card><CardContent className="pt-3 pb-3">
+                  <p className="text-xs text-muted-foreground">Taxa de serviço</p>
+                  <p className="text-lg font-bold text-emerald-600">+{fmtBRL(totais.txServico)}</p>
+                  <p className="text-xs text-muted-foreground">repasse ao restaurante</p>
+                </CardContent></Card>
+              )}
+              {totais.cancelados > 0 && (
+                <Card className="border-slate-200"><CardContent className="pt-3 pb-3">
+                  <p className="text-xs text-muted-foreground">Cancelados</p>
+                  <p className="text-lg font-bold text-slate-500">{totais.cancelados} pedido(s)</p>
+                  <p className="text-xs text-muted-foreground">{fmtBRL(totais.valCancelado)} excluído dos totais</p>
+                </CardContent></Card>
+              )}
+            </div>
+          )}
+
+          {/* Filtros */}
+          <div className="flex gap-2 flex-wrap items-center">
+            {[
+              { k: "todos",       l: `Todos (${items.length})` },
+              { k: "divergencias",l: `⚠️ Divergências (${totais.divergentes})` },
+              { k: "conciliado",  l: `✅ OK (${totais.conciliados})` },
+              { k: "cancelado",   l: `Cancelados (${totais.cancelados})` },
+            ].map(f => (
+              <button key={f.k} onClick={() => setFiltro(f.k)}
+                className={`text-xs px-3 py-1.5 rounded-full border transition-colors
+                  ${filtro === f.k ? "bg-primary text-primary-foreground border-primary" : "border-border hover:border-primary/50 text-muted-foreground"}`}>
+                {f.l}
+              </button>
+            ))}
+            <button onClick={() => setExpandido(new Set(itensFiltrados.map((i: any) => i.id)))}
+              className="text-xs px-3 py-1.5 rounded-full border border-border hover:border-primary/50 text-muted-foreground ml-auto">
+              ↕ Expandir tudo
+            </button>
+            <button onClick={() => setExpandido(new Set())}
+              className="text-xs px-3 py-1.5 rounded-full border border-border hover:border-primary/50 text-muted-foreground">
+              Recolher
+            </button>
+          </div>
+
+          {/* Lista de pedidos — mesmo layout do import */}
+          <div className="space-y-2">
+            {itensFiltrados.map((item: any) => {
+              const status = item.divergencia_tipo || "nenhuma";
+              const cfg = STATUS_CFG[status as keyof typeof STATUS_CFG] || STATUS_CFG.nenhuma;
+              const isOpen = expandido.has(item.id);
+              const bruto = Number(item.valor_pdv ?? 0);
+              const liquido = Number(item.valor_liquido ?? 0);
+              const descLoja = Number(item.incentivo_loja ?? 0);
+              const fatPDV = bruto - descLoja;
+              const comissao = fatPDV - liquido;
+              const pctRepasse = fatPDV > 0 ? Math.round(liquido / fatPDV * 100) : 0;
+
+              return (
+                <div key={item.id} className="border rounded-xl overflow-hidden bg-card shadow-sm">
+                  <div className={`h-1 ${cfg.bar}`} />
+                  <button
+                    className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-muted/20 transition-colors"
+                    onClick={() => toggleExpand(item.id)}
+                  >
+                    <cfg.Icon className={`h-4 w-4 shrink-0 ${
+                      status === "nenhuma" || status === "conciliado" ? "text-emerald-600"
+                      : status === "cancelado" ? "text-muted-foreground"
+                      : "text-amber-600"}`} />
+
+                    <span className="font-mono text-xs text-muted-foreground shrink-0 w-10">
+                      #{item.numero_pedido}
+                    </span>
+
+                    <Badge variant="outline" className={`text-xs shrink-0 ${cfg.cls}`}>
+                      {cfg.label}
+                    </Badge>
+
+                    <span className="text-xs text-muted-foreground truncate flex-1 hidden sm:block">
+                      {item.loja}
+                    </span>
+
+                    {/* PDV → iFood inline */}
+                    <div className="hidden sm:flex items-center gap-1.5 shrink-0 text-xs">
+                      <span className="text-blue-700 font-mono">{fmtBRL(fatPDV)}</span>
+                      <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-emerald-600 font-mono font-semibold">{fmtBRL(liquido)}</span>
+                      {comissao > 0.05 && (
+                        <span className="text-red-500 text-[10px]">(−{fmtBRL(comissao)})</span>
+                      )}
+                    </div>
+
+                    {/* Mini barra */}
+                    {bruto > 0 && (
+                      <div className="hidden sm:flex items-center gap-1 shrink-0">
+                        <div className="flex h-2 w-14 rounded-full overflow-hidden bg-muted">
+                          <div className="bg-emerald-500 rounded-l-full" style={{ width: `${pctRepasse}%` }} />
+                          <div className="bg-red-400 rounded-r-full" style={{ width: `${100-pctRepasse}%` }} />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground">{pctRepasse}%</span>
+                      </div>
+                    )}
+
+                    {isOpen
+                      ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                  </button>
+
+                  {isOpen && <DetalhesPedido item={item} />}
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

@@ -52,6 +52,7 @@ export interface IFoodPDVRow {
   desconto_loja_produto: number;
   desconto_loja_entrega: number;
   desconto_parceiro_venda: number;
+  desconto_parceiro_produtos: number;   // campo real onde o desconto de campanha cai
   desconto_parceiro_entrega: number;
   taxa_entrega: number;
   total_pago_parceiro: number;
@@ -222,6 +223,7 @@ export async function parseIFoodPDV(file: File): Promise<IFoodPDVRow[]> {
       desconto_loja_produto: parseNum(r["Desconto loja em Produtos"]),
       desconto_loja_entrega: parseNum(r["Desconto loja em Taxa de Entrega"]),
       desconto_parceiro_venda: parseNum(r["Desconto Parceiro em Venda"]),
+      desconto_parceiro_produtos: parseNum(r["Desconto Parceiro em Produtos"]),
       desconto_parceiro_entrega: parseNum(r["Desconto Parceiro em Taxa de Entrega"]),
       taxa_entrega: parseNum(r["Taxa de entrega"]),
       total_pago_parceiro: parseNum(r["Total Pago no Parceiro"]),

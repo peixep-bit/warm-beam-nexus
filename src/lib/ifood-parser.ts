@@ -89,6 +89,9 @@ export interface ReconciliacaoItem {
   taxa_entrega?: number;       // retida pelo iFood
   // Desconto da loja (venda + produto) — explica diferença Valor Itens vs Total Faturado PDV
   desconto_loja_pdv?: number;
+  // Auditoria do cálculo do líquido
+  liquido_metodo?: string;   // como o líquido foi calculado
+  liquido_ajuste?: number;   // valor do incentivo somado (0 = sem ajuste)
   // Metadados
   loja: string;
   data_transacao: string;
@@ -234,6 +237,60 @@ export async function parseIFoodPDV(file: File): Promise<IFoodPDVRow[]> {
     })) as IFoodPDVRow[];
 }
 
+
+// ─── Regra de negócio: cálculo do líquido esperado ────────────
+// Valida se o líquido do iFood pode ser explicado pela fórmula base
+// + incentivos subsidiados. Útil para auditoria e flag de ajuste.
+
+interface LiquidoCalculado {
+  valor: number;
+  metodo: "base" | "base_mais_inc_loja" | "base_mais_inc_ifood" | "base_mais_inc_rede" | "ifood_fonte_verdade" | "cancelado";
+  ajuste: number;     // valor do incentivo que foi somado (0 se não houve ajuste)
+}
+
+function calcularLiquidoEsperado(
+  totalFaturadoPDV: number,
+  taxasComissoes: number,      // já negativo ou positivo — usamos abs
+  incentivoLoja: number,
+  incentivoIfood: number,
+  incentivoRede: number,
+  liquidoReal: number,
+  cancelado: boolean,
+  tolerancia = 0.03
+): LiquidoCalculado {
+  // Cancelado: iFood não repassa nada — líquido = 0
+  if (cancelado || liquidoReal <= 0) {
+    return { valor: 0, metodo: "cancelado", ajuste: 0 };
+  }
+
+  const calcBase = totalFaturadoPDV - Math.abs(taxasComissoes);
+  const diff = Math.round((liquidoReal - calcBase) * 100) / 100;
+
+  // Caso 1: fórmula base fecha exatamente
+  if (Math.abs(diff) <= tolerancia) {
+    return { valor: calcBase, metodo: "base", ajuste: 0 };
+  }
+
+  // Caso 2: incentivo loja foi reintegrado ao repasse
+  if (incentivoLoja > 0 && Math.abs(diff - incentivoLoja) <= tolerancia) {
+    return { valor: calcBase + incentivoLoja, metodo: "base_mais_inc_loja", ajuste: incentivoLoja };
+  }
+
+  // Caso 3: incentivo iFood foi reintegrado ao repasse
+  if (incentivoIfood > 0 && Math.abs(diff - incentivoIfood) <= tolerancia) {
+    return { valor: calcBase + incentivoIfood, metodo: "base_mais_inc_ifood", ajuste: incentivoIfood };
+  }
+
+  // Caso 4: incentivo rede foi reintegrado
+  if (incentivoRede > 0 && Math.abs(diff - incentivoRede) <= tolerancia) {
+    return { valor: calcBase + incentivoRede, metodo: "base_mais_inc_rede", ajuste: incentivoRede };
+  }
+
+  // Fallback: diferença não explicada por incentivos → usar valor_liquido real do iFood
+  // Ex: pedido #3643 com diff=4.82 não explicada — taxa oculta do iFood
+  return { valor: liquidoReal, metodo: "ifood_fonte_verdade", ajuste: 0 };
+}
+
 // ─── Engine de reconciliação client-side ─────────────────────
 
 export function reconciliar(
@@ -333,6 +390,17 @@ export function reconciliar(
         taxa_servico: e.taxa_servico,
         taxa_entrega: e.taxa_entrega,
         desconto_loja_pdv: p.desconto_loja_total,
+        // Auditoria do líquido — aplica regra de incentivos subsidiados
+        liquido_metodo: calcularLiquidoEsperado(
+          p.total_faturado, e.taxas_comissoes,
+          e.incentivo_loja, e.incentivo_ifood, e.incentivo_rede,
+          e.valor_liquido, false
+        ).metodo,
+        liquido_ajuste: calcularLiquidoEsperado(
+          p.total_faturado, e.taxas_comissoes,
+          e.incentivo_loja, e.incentivo_ifood, e.incentivo_rede,
+          e.valor_liquido, false
+        ).ajuste,
         loja: p.loja || e.loja,
         data_transacao: e.data_transacao,
         forma_pagamento: e.forma_pagamento || p.forma_pagamento,

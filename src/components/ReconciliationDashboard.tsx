@@ -55,8 +55,12 @@ function Campo({ label, valor, cor = "", destaque = false, hideZero = false }: {
 
 function DetalhesPedido({ item }: { item: any }) {
   const bruto        = Number(item.valor_pdv ?? 0);
-  const descLoja     = Number(item.incentivo_loja ?? 0);
-  const fatPDV       = bruto - descLoja;
+  // total_faturado_pdv salvo em valor_liquido_conciliado
+  // desconto_loja_pdv salvo em desconto
+  const descLojaPDV  = Number(item.desconto ?? 0);
+  const fatPDV       = Number(item.valor_liquido_conciliado ?? 0) || (bruto - descLojaPDV);
+  // incentivo_loja do extrato iFood (pode ser diferente do desconto PDV)
+  const incLoja      = Number(item.incentivo_loja ?? 0);
   const taxas        = Number(item.taxas_comissoes ?? 0);
   const incIfood     = Number(item.incentivo_ifood ?? 0);
   const incRede      = Number(item.incentivo_rede ?? 0);
@@ -80,8 +84,8 @@ function DetalhesPedido({ item }: { item: any }) {
             PDV — caixa registrou
           </p>
           <Campo label="Total em Produtos (PDV)" valor={bruto} destaque />
-          {descLoja > 0 && (
-            <Campo label="Desconto loja (PDV)" valor={-descLoja} cor="text-amber-600" />
+          {descLojaPDV > 0 && (
+            <Campo label="Desconto loja (PDV)" valor={-descLojaPDV} cor="text-amber-600" />
           )}
           <Campo label="Total faturado (PDV)" valor={fatPDV} cor="text-blue-700" />
         </div>
@@ -105,7 +109,7 @@ function DetalhesPedido({ item }: { item: any }) {
           <Campo label="Valor dos itens (iFood)" valor={bruto} destaque />
           <Campo label="Taxas e comissões" valor={taxas} cor="text-red-600" />
           <Campo label="Incentivo iFood" valor={incIfood} cor="text-emerald-600" hideZero />
-          <Campo label="Incentivo loja" valor={descLoja} cor="text-amber-600" hideZero />
+          <Campo label="Incentivo loja" valor={incLoja} cor="text-amber-600" hideZero />
           <Campo label="Incentivo rede" valor={incRede} cor="text-amber-600" hideZero />
           <Campo label="Taxa de serviço" valor={txServ} cor="text-emerald-600" hideZero />
           <Campo label="Taxa de entrega (retida)" valor={txEntrega} cor="text-muted-foreground" hideZero />
@@ -466,8 +470,8 @@ export function ReconciliationDashboard() {
               const isOpen = expandido.has(item.id);
               const bruto = Number(item.valor_pdv ?? 0);
               const liquido = Number(item.valor_liquido ?? 0);
-              const descLoja = Number(item.incentivo_loja ?? 0);
-              const fatPDV = bruto - descLoja;
+              const descLojaPDV2 = Number(item.desconto ?? 0);
+              const fatPDV = Number(item.valor_liquido_conciliado ?? 0) || (bruto - descLojaPDV2);
               const comissao = fatPDV - liquido;
               const pctRepasse = fatPDV > 0 ? Math.round(liquido / fatPDV * 100) : 0;
 
